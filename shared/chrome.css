@@ -381,3 +381,80 @@ html[data-theme="zen"] .wg-collapse{ border:1px solid rgba(58,58,50,.25); border
 .wa-rec .track{ width:120px; height:4px; background:rgba(255,255,255,.15); border-radius:2px; overflow:hidden }
 .wa-rec .bar{ width:0%; height:100%; background:#fff; transition:width .25s linear }
 @keyframes wa-pulse{ 0%,100%{opacity:1} 50%{opacity:.35} }
+
+/* ---------- MOBILE (<= 640px) ----------
+   Strategy: keep header to a single row.
+   - breadcrumb collapses to just `wordart` (hide leading crumbs)
+   - effect-nav horizontal-scrolls (overflow-x:auto) — single row, no wrap
+   - wa-actions stay visible to the right, shrunk padding, 36px min touch target
+   - theme pill kept compact
+   - splash title shrinks, kbd grid stacks single column
+   - footer shrinks font/spacing
+   (Panel responsiveness lives in gui.css.) */
+@media (max-width:640px){
+  .wa-top{
+    height:48px;
+    gap:8px;
+    padding:0 8px;
+  }
+  .kami-breadcrumb{ font-size:.72rem; flex:0 0 auto; }
+  .kami-breadcrumb a, .kami-breadcrumb .sep:first-of-type, .kami-breadcrumb a + .sep{ display:none; }
+  /* Show only the trailing `wordart` current span */
+  .kami-breadcrumb .current{ display:inline; }
+
+  .wa-top .grow{ display:none; }
+
+  .effect-nav{
+    flex:1 1 auto;
+    min-width:0;
+    overflow-x:auto;
+    overflow-y:hidden;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
+    padding-bottom:2px;
+    gap:4px;
+  }
+  .effect-nav::-webkit-scrollbar{ display:none; }
+  .effect-nav a{
+    flex:0 0 auto;
+    padding:6px 10px;
+    font-size:12px;
+    min-height:32px;
+    display:inline-flex;
+    align-items:center;
+  }
+
+  .wa-actions{
+    flex:0 0 auto;
+    gap:4px;
+  }
+  .wa-actions button{
+    padding:0 8px;
+    height:36px;
+    min-width:36px;
+    font-size:11px;
+    letter-spacing:0;
+  }
+
+  .theme-switcher-container{ flex:0 0 auto; }
+  .theme-switcher-pill{ width:26px; height:26px; }
+
+  /* Splash: shrink title, stack the kbd grid single column */
+  .wa-splash-inner{ padding:24px 20px; max-width:100%; }
+  .wa-splash-title{ font-size:30px; margin-bottom:6px; }
+  .wa-splash-tag{ font-size:11px; margin-bottom:22px; }
+  .wa-splash-grid{
+    grid-template-columns:1fr;
+    gap:14px 0;
+    margin-bottom:24px;
+    font-size:11px;
+    text-align:center;
+  }
+  .wa-splash-grid > span:nth-child(odd){ justify-self:center; }
+  .wa-splash-grid > span:nth-child(even){ margin-top:-8px; }
+
+  /* Footer: tighter */
+  .wa-bottom{ padding:6px 10px 8px; font-size:.64rem; gap:2px; }
+  .wa-bottom .row.made{ font-size:.68rem; }
+  .wa-bottom .row{ gap:.35rem; }
+}

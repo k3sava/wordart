@@ -69,3 +69,69 @@
 .wg-button{ grid-template-columns:1fr; padding:0 12px 6px; }
 .wg-button button{ width:100%; padding:7px 0; background:var(--button-bg); border:1px solid var(--panel-border); color:var(--button-text); font-family:var(--kami-font-body); font-size:12px; cursor:pointer; border-radius:2px; letter-spacing:.02em; }
 .wg-button button:hover{ background:var(--button-bg-hover); color:var(--button-text-hover); }
+
+/* ---------- MOBILE PANEL (<=640px) ----------
+   Convert the side panel into a slide-up bottom sheet.
+   - default (uncollapsed) state: sheet up, ~55% viewport tall, scrollable body
+   - collapsed state: sheet down, only a thin pill+handle visible above footer
+   The existing .wg-collapse chevron still toggles .collapsed; we just
+   rotate it so `›` reads as "down" and `‹` reads as "up" visually. */
+@media (max-width:640px){
+  .wg{
+    top:auto;
+    right:0;
+    left:0;
+    bottom:42px; /* sit just above footer */
+    width:100%;
+    max-height:55dvh;
+    border-radius:12px 12px 0 0;
+    border-left:none; border-right:none; border-bottom:none;
+    box-shadow:0 -2px 8px rgba(0,0,0,.1);
+    /* Default on mobile = sheet down (only handle peek). The .collapsed
+       class (toggled by chevron) flips the panel to the OPEN state — this
+       inverts desktop semantics, but matches "auto-collapsed on load" from
+       a CSS-only standpoint while keeping JS untouched. */
+    transform:translateY(calc(100% - 14px));
+    transition:transform .25s cubic-bezier(.2,0,0,1);
+    display:flex; flex-direction:column;
+  }
+  .wg > :not(.wg-collapse){ visibility:hidden; }
+  .wg-title{
+    padding:10px 12px 10px 44px;
+    flex:0 0 auto;
+  }
+  .wg-body{
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    flex:1 1 auto;
+    padding-bottom:8px;
+  }
+  /* Larger touch targets inside rows */
+  .wg-row{ min-height:36px; padding:8px 12px; }
+  .wg-track{ height:22px; }
+  .wg input[type="checkbox"]{ width:18px; height:18px; }
+
+  /* Collapse handle on top edge (was top-left of side panel) */
+  .wg-collapse{
+    top:-14px;
+    left:50%;
+    transform:translateX(-50%);
+    width:56px; height:26px;
+    border-radius:13px;
+    font-size:14px;
+  }
+  /* Inverted-on-mobile: default = sheet down (▴ = tap to open).
+     .collapsed (after chevron tap) = sheet up (▾ = tap to close). */
+  .wg .wg-collapse::before{ content:"▴" }
+  .wg.collapsed .wg-collapse::before{ content:"▾" }
+
+  /* .collapsed on mobile = OPEN state (slide up, contents visible) */
+  .wg.collapsed{
+    transform:translateY(0);
+    background:var(--panel-bg);
+    border:1px solid var(--panel-border);
+    border-bottom:none;
+    box-shadow:0 -6px 24px rgba(0,0,0,.18);
+  }
+  .wg.collapsed > :not(.wg-collapse){ visibility:visible; }
+}
