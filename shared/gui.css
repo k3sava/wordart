@@ -23,7 +23,8 @@
   background:var(--panel-title-bg);
   color:var(--panel-title-text);
   border:1px solid var(--panel-border);
-  border-radius:5px;
+  border-radius:999px;
+  box-shadow:0 1px 4px rgba(0,0,0,.18);
   font-family:var(--kami-font-mono); font-size:13px; font-weight:600;
   cursor:pointer;
   transition:background .15s, color .15s;
