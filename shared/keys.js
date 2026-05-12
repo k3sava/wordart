@@ -31,7 +31,7 @@
 
   function typingTarget(t){
     if(!t) return false;
-    if(t.matches?.('input, textarea')) return true;
+    if(typeof t.matches === 'function' && t.matches('input, textarea')) return true;
     return t.tagName === 'INPUT' || t.tagName === 'TEXTAREA';
   }
 

@@ -67,7 +67,8 @@
   else attach();
 
   document.addEventListener('keydown', (e) => {
-    if(e.target.matches('input, textarea')) return;
+    const t = e.target;
+    if(t && typeof t.matches === 'function' && t.matches('input, textarea')) return;
     if(e.key === 't' || e.key === 'T'){
       // T cycles to next theme.
       const i = THEMES.findIndex(t => t.id === current());
