@@ -116,11 +116,15 @@ function rasterizeText(){
   };
 }
 
-function applyAnimationT(t01){
-  // Float interpolation for smooth motion; splits must stay integer (grid math).
+// _axisAngle drives a continuous full rotation of the slice axis (the bands
+// tilt smoothly through 360° over one cycle). Mirrors line's monotonic angle
+// sweep so the motion feels alive instead of just breathing.
+let _axisAngle = 0;
+function applyAnimationT(t01, t_loop){
   const o = lerp(ANIM.offset.rest, ANIM.offset.peak, t01);
   const s = lerp(ANIM.splits.rest, ANIM.splits.peak, t01);
   const stretch = lerp(ANIM.textStretch.rest, ANIM.textStretch.peak, t01);
+  _axisAngle = (t_loop || 0) * Math.PI * 2;
   if(gui){
     gui.rows.get('offset')?._write(o);
     gui.rows.get('splits')?._write(s);
@@ -146,6 +150,9 @@ function paint(){
 
   ctx.save();
   ctx.translate(w / 2, h / 2);
+  // Rotate the entire slice composition. The band blits below are computed
+  // in a rotated frame, so the bands appear to sweep through every angle.
+  if(_axisAngle) ctx.rotate(_axisAngle);
   ctx.scale(params.textStretch, 1);
 
   // Source band positions in BACKING pixels (drawImage source is unscaled).
@@ -183,7 +190,7 @@ function redraw(){
 
 function renderAnimationFrame(t_loop){
   const t01 = (1 - Math.cos(t_loop * 2 * Math.PI)) / 2;
-  applyAnimationT(t01);
+  applyAnimationT(t01, t_loop);
   rasterizeText();
   paint();
 }
