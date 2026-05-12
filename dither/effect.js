@@ -53,7 +53,7 @@ function seedFromT(t01){
 function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
 
 const params = {
-  pixelDistortion: Math.floor(Math.random() * 11), // 0..10 — clean landing frame; animation drives noise
+  pixelDistortion: 95 + Math.floor(Math.random() * 6), // 95..100 — clean landing frame; animation sweeps down to noisy rest
   pixelSize: 10,
   pixelSpacing: 0,
   cellRotation: 0,
