@@ -11,9 +11,11 @@
 
 const ELECTRIC_COLORS = ["#000000","#ADD8E6","#FF96FF","#ffcf37","#B5651D","#ff781e","#b6b6ed","#00FF00","#FF3333"];
 const CYCLE_MS = 15000;
+// Intro/outro IS the blur effect: rest = heavily blurred blob, peak = crisp.
+// Text emerges from the blur and dissolves back into it.
 const ANIM = {
-  blurAmount:    { rest:  0, peak: 28 },
-  letterSpacing: { rest: -10, peak: -50 },
+  blurAmount:    { rest: 30, peak: 0 },
+  letterSpacing: { rest: -40, peak: -10 },
 };
 function lerp(a, b, t){ return a + (b - a) * t; }
 function pingpongT(elapsed){ return (1 - Math.cos((elapsed % CYCLE_MS) / CYCLE_MS * Math.PI * 2)) / 2; }
@@ -201,12 +203,18 @@ function applyAnimationT(t01){
   rasterizeText();
 }
 
+function renderAnimationFrame(t_loop){
+  const t01 = (1 - Math.cos(t_loop * 2 * Math.PI)) / 2;
+  applyAnimationT(t01);
+  // applyAnimationT already re-rasterises (letterSpacing changes glyph layout).
+  buildBlur();
+  paint();
+}
+
 function animationLoop(){
   if(!params.animate) return;
   const elapsed = performance.now() - animationStartTime;
-  applyAnimationT(pingpongT(elapsed));
-  buildBlur();
-  paint();
+  renderAnimationFrame((elapsed % CYCLE_MS) / CYCLE_MS);
   dirty.raster = dirty.build = dirty.paint = false;
   animationId = requestAnimationFrame(animationLoop);
 }
@@ -221,20 +229,16 @@ function toggleAnimation(){
   }
 }
 
-let _wasAnimating = false;
 window.WAEffect = {
   cycleMs: CYCLE_MS,
-  beginRecording(){
-    _wasAnimating = params.animate;
-    if(!_wasAnimating){ params.animate = true; gui?.rows.get('animate')?._write(true); }
-    animationStartTime = performance.now();
-    if(!animationId) animationLoop();
-  },
-  endRecording(){
-    if(!_wasAnimating){
-      params.animate = false;
-      gui?.rows.get('animate')?._write(false);
-      if(animationId){ cancelAnimationFrame(animationId); animationId = null; }
+  renderAt(t_loop){ renderAnimationFrame(t_loop); },
+  pauseRender(){ if(animationId){ cancelAnimationFrame(animationId); animationId = null; } },
+  resumeRender(){
+    if(params.animate && !animationId){
+      animationStartTime = performance.now();
+      animationLoop();
+    } else if(!params.animate){
+      redraw();
     }
   },
 };

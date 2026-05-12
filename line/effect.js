@@ -27,6 +27,11 @@ const ANIM = {
 };
 function lerp(a, b, t){ return a + (b - a) * t; }
 function pingpongT(elapsed){ return (1 - Math.cos((elapsed % CYCLE_MS) / CYCLE_MS * Math.PI * 2)) / 2; }
+// Envelope: 0 → 1 → 0 across one cycle (smooth sine). Drives text scale so
+// the phrase appears at the start, peaks mid-cycle, and disappears at the end —
+// the intro/outro the user asked for. Used by rasterizeText().
+function envelopeT(elapsed){ return Math.sin((elapsed % CYCLE_MS) / CYCLE_MS * Math.PI); }
+let _envScale = 1;
 
 function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
 
@@ -98,10 +103,14 @@ function rasterizeText(){
   tctx.clearRect(0, 0, textBuf.width, textBuf.height);
   tctx.restore();
   tctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  // Envelope-scaled size: during animate, _envScale rises from 0 to 1 over the
+  // first half of the cycle and falls back to 0 — the text grows on, then off.
+  const scaledSize = params.textSize * _envScale;
+  if(scaledSize < 4) return; // sub-pixel — leave canvas empty for clean intro/outro
   const weight = params.bold ? 'bold' : 'normal';
   const style  = params.italic ? 'italic' : 'normal';
   const FIT = 0.92;
-  let size = params.textSize;
+  let size = scaledSize;
   tctx.font = `${style} ${weight} ${size}px Helvetica`;
   const measured = tctx.measureText(params.text).width;
   if(measured > 0 && measured > w * FIT){
@@ -214,14 +223,24 @@ function applyAnimationT(t01){
   params.lineSpacing = lg;
 }
 
+// Render a specific point in the animation cycle. Called by both the live
+// animation loop and the offline video exporter. t_loop ∈ [0, 1].
+function renderAnimationFrame(t_loop){
+  _envScale = Math.sin(t_loop * Math.PI);
+  const t01 = (1 - Math.cos(t_loop * 2 * Math.PI)) / 2;
+  applyAnimationT(t01);
+  rasterizeText();
+  invalidateRaster();
+  buildLines();
+  paint();
+}
+
 function animationLoop(){
   if(!params.animate) return;
   const elapsed = performance.now() - animationStartTime;
-  applyAnimationT(pingpongT(elapsed));
-  if(dirty.raster){ rasterizeText(); invalidateRaster(); dirty.raster = false; }
-  buildLines();
-  paint();
-  dirty.build = dirty.paint = false;
+  const t_loop = (elapsed % CYCLE_MS) / CYCLE_MS;
+  renderAnimationFrame(t_loop);
+  dirty.raster = dirty.build = dirty.paint = false;
   animationId = requestAnimationFrame(animationLoop);
 }
 
@@ -236,20 +255,19 @@ function toggleAnimation(){
 }
 
 // Recording protocol — export.js calls these to force a clean 15 s loop.
-let _wasAnimating = false;
 window.WAEffect = {
   cycleMs: CYCLE_MS,
-  beginRecording(){
-    _wasAnimating = params.animate;
-    if(!_wasAnimating){ params.animate = true; gui?.rows.get('animate')?._write(true); }
-    animationStartTime = performance.now();
-    if(!animationId) animationLoop();
-  },
-  endRecording(){
-    if(!_wasAnimating){
-      params.animate = false;
-      gui?.rows.get('animate')?._write(false);
-      if(animationId){ cancelAnimationFrame(animationId); animationId = null; }
+  // Render at a specific point in the loop — used by the offline exporter
+  // to materialise frames without disturbing the live animation timer.
+  renderAt(t_loop){ renderAnimationFrame(t_loop); },
+  // Suspend / resume the live animation while the exporter is generating frames.
+  pauseRender(){ if(animationId){ cancelAnimationFrame(animationId); animationId = null; } },
+  resumeRender(){
+    if(params.animate && !animationId){
+      animationStartTime = performance.now();
+      animationLoop();
+    } else if(!params.animate){
+      _envScale = 1; redraw();
     }
   },
 };

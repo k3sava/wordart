@@ -191,16 +191,26 @@ function redraw(){
 
 const RASTER_KEYS = new Set(['text','textSize','bold','italic']);
 
+function renderAnimationFrame(t_loop){
+  // pingpong 0→1→0 over the cycle drives both the appear/disappear and the
+  // invert sweep so the rest state is text-less and peak is fully revealed.
+  const t01 = (1 - Math.cos(t_loop * 2 * Math.PI)) / 2;
+  if(dirty.raster){ rasterizeText(); dirty.raster = false; }
+  paint(t01);
+}
+
 function animationLoop(){
   if(!params.animate) return;
-  if(dirty.raster){ rasterizeText(); dirty.raster = false; }
-  paint(currentTransition());
+  const elapsed = performance.now() - (animationStartTime || performance.now());
+  renderAnimationFrame((elapsed % 15000) / 15000);
   dirty.paint = false;
   animationId = requestAnimationFrame(animationLoop);
 }
+let animationStartTime = 0;
 
 function toggleAnimation(){
   if(params.animate){
+    animationStartTime = performance.now();
     animationLoop();
   } else if(animationId){
     cancelAnimationFrame(animationId);
@@ -208,6 +218,20 @@ function toggleAnimation(){
     paint(currentTransition());
   }
 }
+
+window.WAEffect = {
+  cycleMs: 15000,
+  renderAt(t_loop){ renderAnimationFrame(t_loop); },
+  pauseRender(){ if(animationId){ cancelAnimationFrame(animationId); animationId = null; } },
+  resumeRender(){
+    if(params.animate && !animationId){
+      animationStartTime = performance.now();
+      animationLoop();
+    } else if(!params.animate){
+      redraw();
+    }
+  },
+};
 
 function handleMouseMove(e){
   if(!params.interactive || params.animate) return;

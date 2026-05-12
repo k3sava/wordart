@@ -15,10 +15,13 @@
 const SPEEDY_ANIMALS = ["Cheetah","Falcon","Sailfish","Marlin","Gazelle","Hare","Ostrich","Lion","Leopard"];
 const ELECTRIC_COLORS = ["#000000","#ADD8E6","#FF96FF","#ffcf37","#B5651D","#ff781e","#b6b6ed","#00FF00","#FF3333"];
 const CYCLE_MS = 15000;
+// Intro/outro IS the slice effect: at rest the bands are fanned wide
+// (text scattered into horizontal stripes), at peak they converge at zero
+// (full text). The same shape on the way back.
 const ANIM = {
-  offset:      { rest: 0,   peak: 40 },
-  splits:      { rest: 2,   peak: 16 },
-  textStretch: { rest: 1,   peak: 1.3 },
+  offset:      { rest: 80,  peak: 0 },
+  splits:      { rest: 10,  peak: 10 },
+  textStretch: { rest: 1,   peak: 1 },
 };
 function lerp(a, b, t){ return a + (b - a) * t; }
 function pingpongT(elapsed){ return (1 - Math.cos((elapsed % CYCLE_MS) / CYCLE_MS * Math.PI * 2)) / 2; }
@@ -178,13 +181,18 @@ function redraw(){
   paint();
 }
 
+function renderAnimationFrame(t_loop){
+  const t01 = (1 - Math.cos(t_loop * 2 * Math.PI)) / 2;
+  applyAnimationT(t01);
+  rasterizeText();
+  paint();
+}
+
 function animationLoop(){
   if(!params.animate) return;
   const elapsed = performance.now() - animationStartTime;
-  applyAnimationT(pingpongT(elapsed));
-  if(dirty.raster){ rasterizeText(); dirty.raster = false; }
-  paint();
-  dirty.paint = false;
+  renderAnimationFrame((elapsed % CYCLE_MS) / CYCLE_MS);
+  dirty.raster = dirty.paint = false;
   animationId = requestAnimationFrame(animationLoop);
 }
 
@@ -198,20 +206,16 @@ function toggleAnimation(){
   }
 }
 
-let _wasAnimating = false;
 window.WAEffect = {
   cycleMs: CYCLE_MS,
-  beginRecording(){
-    _wasAnimating = params.animate;
-    if(!_wasAnimating){ params.animate = true; gui?.rows.get('animate')?._write(true); }
-    animationStartTime = performance.now();
-    if(!animationId) animationLoop();
-  },
-  endRecording(){
-    if(!_wasAnimating){
-      params.animate = false;
-      gui?.rows.get('animate')?._write(false);
-      if(animationId){ cancelAnimationFrame(animationId); animationId = null; }
+  renderAt(t_loop){ renderAnimationFrame(t_loop); },
+  pauseRender(){ if(animationId){ cancelAnimationFrame(animationId); animationId = null; } },
+  resumeRender(){
+    if(params.animate && !animationId){
+      animationStartTime = performance.now();
+      animationLoop();
+    } else if(!params.animate){
+      redraw();
     }
   },
 };

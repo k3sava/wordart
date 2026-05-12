@@ -1,26 +1,19 @@
-// Shared export helpers — PNG and 15 s perfectly-loopable MP4 of the canvas.
-// The MP4 forces the active effect into Animate mode, resets the cycle so
-// recording begins at the rest state (t=0), captures exactly one cycle, then
-// restores the prior animate state. Frame 0 and the final frame produce the
-// same canvas content for a seamless loop.
+// Shared export helpers.
+//
+// PNG  — single `toDataURL` download.
+// MP4  — offline frame-by-frame WebCodecs render. We do NOT capture the live
+//        canvas in real time; we ask the active effect to render each frame
+//        of an animation cycle at a deterministic t_loop in [0, 1), encode it
+//        directly via VideoEncoder, mux it through mp4-muxer (with webm-muxer
+//        as fallback). 15 second output, two full pingpong loops inside it,
+//        so frame 0 and the final frame are identical and the file plays as
+//        a seamless loop. The UI stays interactive while rendering.
 (function(){
   'use strict';
-  const RECORD_SECONDS = 15;
-  const FPS = 30;
-
-  function pickMime(){
-    const tries = [
-      'video/mp4;codecs=avc1.42E01E',
-      'video/mp4',
-      'video/webm;codecs=vp9',
-      'video/webm;codecs=vp8',
-      'video/webm',
-    ];
-    for(const m of tries){
-      if(typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(m)) return m;
-    }
-    return '';
-  }
+  const TOTAL_S = 15;
+  const FPS    = 30;
+  const LOOPS  = 2;
+  const TOTAL_FRAMES = TOTAL_S * FPS;
 
   function downloadBlob(blob, filename){
     const url = URL.createObjectURL(blob);
@@ -38,67 +31,128 @@
     a.click();
   }
 
-  async function exportVideo(canvas, name, {onProgress, onDone, onError} = {}){
-    const mime = pickMime();
-    if(!mime){ onError && onError('MediaRecorder not supported'); return null; }
-    const ext = mime.startsWith('video/mp4') ? 'mp4' : 'webm';
-    const stream = canvas.captureStream(FPS);
-    const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 8_000_000 });
-    const chunks = [];
-    rec.ondataavailable = (e) => { if(e.data && e.data.size > 0) chunks.push(e.data); };
-    rec.onstop = () => {
-      const blob = new Blob(chunks, { type: mime });
-      downloadBlob(blob, `${name}-${Date.now()}.${ext}`);
-      onDone && onDone(blob);
-    };
-    rec.onerror = (ev) => { onError && onError(ev.error || ev); };
-
-    // Reset the active effect's animation cycle so recording begins at t=0
-    // (the rest state). One RAF lets the first frame paint before capture.
-    if(window.WAEffect && window.WAEffect.beginRecording){
-      window.WAEffect.beginRecording();
+  // Decide which codec the browser can encode. Prefer H.264 in mp4, fall back
+  // to VP9 / VP8 in WebM.
+  async function pickCodec(width, height){
+    if(typeof VideoEncoder === 'undefined') return null;
+    const probes = [
+      { container: 'mp4',  codec: 'avc1.640028', muxerCodec: 'avc'  },
+      { container: 'mp4',  codec: 'avc1.42E01F', muxerCodec: 'avc'  },
+      { container: 'webm', codec: 'vp09.00.10.08', muxerCodec: 'V_VP9' },
+      { container: 'webm', codec: 'vp8',           muxerCodec: 'V_VP8' },
+    ];
+    for(const p of probes){
+      try {
+        const support = await VideoEncoder.isConfigSupported({
+          codec: p.codec, width, height, bitrate: 8_000_000, framerate: FPS,
+        });
+        if(support && support.supported) return p;
+      } catch(e){ /* try next */ }
     }
-    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    return null;
+  }
 
-    rec.start(250);
-    const t0 = performance.now();
-    const tick = () => {
-      const elapsed = (performance.now() - t0) / 1000;
-      const pct = Math.min(1, elapsed / RECORD_SECONDS);
-      onProgress && onProgress(pct);
-      if(elapsed >= RECORD_SECONDS){
-        rec.stop();
-        if(window.WAEffect && window.WAEffect.endRecording){
-          window.WAEffect.endRecording();
+  async function loadMuxer(container){
+    if(container === 'mp4'){
+      return await import('https://cdn.jsdelivr.net/npm/mp4-muxer@5/+esm');
+    }
+    return await import('https://cdn.jsdelivr.net/npm/webm-muxer@5/+esm');
+  }
+
+  async function exportVideoOffline(canvas, name, {onProgress, onDone, onError}){
+    if(!window.WAEffect || typeof window.WAEffect.renderAt !== 'function'){
+      onError && onError('This effect does not yet expose WAEffect.renderAt; cannot render offline.');
+      return;
+    }
+    const codec = await pickCodec(canvas.width, canvas.height);
+    if(!codec){ onError && onError('No supported video codec in this browser.'); return; }
+
+    let muxerLib;
+    try { muxerLib = await loadMuxer(codec.container); }
+    catch(e){ onError && onError('Failed to load muxer: ' + e.message); return; }
+
+    const { Muxer, ArrayBufferTarget } = muxerLib;
+    const target = new ArrayBufferTarget();
+    const muxer = new Muxer({
+      target,
+      video: {
+        codec: codec.muxerCodec,
+        width: canvas.width,
+        height: canvas.height,
+        frameRate: FPS,
+      },
+      fastStart: codec.container === 'mp4' ? 'in-memory' : undefined,
+    });
+
+    const encoder = new VideoEncoder({
+      output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+      error: (e) => { console.error('VideoEncoder error', e); onError && onError(e.message || String(e)); },
+    });
+    encoder.configure({
+      codec: codec.codec,
+      width: canvas.width,
+      height: canvas.height,
+      bitrate: 8_000_000,
+      framerate: FPS,
+    });
+
+    // Suspend the live render loop while we drive frames manually.
+    if(window.WAEffect.pauseRender) window.WAEffect.pauseRender();
+
+    try {
+      for(let i = 0; i < TOTAL_FRAMES; i++){
+        const t_global = (i / TOTAL_FRAMES) * LOOPS;
+        const t_loop   = t_global % 1;
+        window.WAEffect.renderAt(t_loop);
+        const ts = Math.round(i * (1_000_000 / FPS));
+        const vf = new VideoFrame(canvas, { timestamp: ts, duration: Math.round(1_000_000 / FPS) });
+        encoder.encode(vf, { keyFrame: i % 30 === 0 });
+        vf.close();
+        if(i % 5 === 0){
+          onProgress && onProgress(i / TOTAL_FRAMES);
+          // Yield to the UI thread so sliders / clicks stay responsive.
+          await new Promise(r => setTimeout(r, 0));
         }
-        return;
       }
-      requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
-    return rec;
+      await encoder.flush();
+      muxer.finalize();
+      const blob = new Blob([target.buffer], { type: codec.container === 'mp4' ? 'video/mp4' : 'video/webm' });
+      downloadBlob(blob, `${name}-${Date.now()}.${codec.container}`);
+      onProgress && onProgress(1);
+      onDone && onDone(blob);
+    } finally {
+      if(window.WAEffect.resumeRender) window.WAEffect.resumeRender();
+    }
   }
 
   function wire({canvas, name, pngBtn, mp4Btn, rec}){
-    if(pngBtn){
-      pngBtn.addEventListener('click', () => exportPNG(canvas, name));
-    }
-    if(mp4Btn){
-      mp4Btn.addEventListener('click', async () => {
-        if(mp4Btn.dataset.recording) return;
-        mp4Btn.dataset.recording = '1';
-        mp4Btn.disabled = true;
-        const recEl = rec || document.querySelector('.wa-rec');
-        const bar = recEl?.querySelector('.bar');
-        recEl?.classList.add('visible');
-        await exportVideo(canvas, name, {
-          onProgress:(p) => { if(bar) bar.style.width = (p*100).toFixed(1) + '%'; },
-          onDone: () => { recEl?.classList.remove('visible'); if(bar) bar.style.width = '0%'; mp4Btn.disabled = false; delete mp4Btn.dataset.recording; },
-          onError:(e) => { console.error('record error', e); recEl?.classList.remove('visible'); mp4Btn.disabled = false; delete mp4Btn.dataset.recording; alert('Recording failed: ' + e); },
+    if(pngBtn) pngBtn.addEventListener('click', () => exportPNG(canvas, name));
+    if(!mp4Btn) return;
+    mp4Btn.addEventListener('click', async () => {
+      if(mp4Btn.dataset.busy) return;
+      mp4Btn.dataset.busy = '1';
+      const recEl = rec || document.querySelector('.wa-rec');
+      const bar = recEl?.querySelector('.bar');
+      const label = recEl?.querySelector('.label');
+      if(label) label.textContent = 'Rendering';
+      recEl?.classList.add('visible');
+      const cleanup = () => {
+        recEl?.classList.remove('visible');
+        if(bar) bar.style.width = '0%';
+        if(label) label.textContent = 'Recording';
+        delete mp4Btn.dataset.busy;
+      };
+      try {
+        await exportVideoOffline(canvas, name, {
+          onProgress:(p) => { if(bar) bar.style.width = (p * 100).toFixed(1) + '%'; },
+          onDone: cleanup,
+          onError:(e) => { console.error(e); alert('Export failed: ' + e); cleanup(); },
         });
-      });
-    }
+      } catch(e){
+        console.error(e); alert('Export failed: ' + e.message); cleanup();
+      }
+    });
   }
 
-  window.WAExport = { wire, exportPNG, exportVideo, RECORD_SECONDS, FPS };
+  window.WAExport = { wire, exportPNG, exportVideoOffline, TOTAL_S, FPS, LOOPS };
 })();
