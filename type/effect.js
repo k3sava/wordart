@@ -15,8 +15,11 @@ const ANIM_PERIOD = 3000; // full sine cycle
 function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
 
 const params = {
+  // Cell letters need to be substantially larger than the cell so adjacent
+  // glyphs overlap and form solid coverage of the big-text shape — otherwise
+  // the mosaic reads as faint ASCII art (gappy at the cell lattice).
   pixelSize: 15,
-  letterSize: Math.floor(10 + Math.random() * 11), // 10..20
+  letterSize: Math.floor(22 + Math.random() * 9), // 22..30 — fills + overlaps cells
   invert: false,
   animate: false,
   interactive: false,
@@ -148,7 +151,9 @@ function paint(progress){
   yStart = Math.max(0, Math.floor(yStart));
   yEnd   = Math.min(h, Math.ceil(yEnd));
 
-  ctx.font = fontSpec(letterSize);
+  // Cell letters are drawn bold regardless of params.bold so the mosaic stays
+  // legible — params.bold controls the big-text rasterisation, not the mosaic.
+  ctx.font = `normal bold ${letterSize}px Helvetica`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
   const letterMetrics = ctx.measureText('M');
@@ -251,9 +256,9 @@ function handleMouseMove(e){
   const r = cv.getBoundingClientRect();
   const ax = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
   const ay = Math.max(0, Math.min(1, (e.clientY - r.top)  / r.height));
-  // Mouse X drives Pixel size (10–50). Mouse Y drives Letter size (10–20).
+  // Mouse X drives Pixel size (10–50). Mouse Y drives Letter size (10–50).
   params.pixelSize  = Math.round(10 + ax * 40);
-  params.letterSize = Math.round(10 + ay * 10);
+  params.letterSize = Math.round(10 + ay * 40);
   if(gui){
     gui.rows.get('pixelSize')?._write(params.pixelSize);
     gui.rows.get('letterSize')?._write(params.letterSize);
