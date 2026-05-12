@@ -155,30 +155,44 @@ function paint(progress){
   const yOff = ((letterMetrics.actualBoundingBoxAscent ?? letterMetrics.fontBoundingBoxAscent ?? 0)
               - (letterMetrics.actualBoundingBoxDescent ?? letterMetrics.fontBoundingBoxDescent ?? 0)) / 2;
 
-  // Cache for letter lookups by x — small win since rows reuse the same x's.
+  // Letter-scroll animation: each cell's target letter is the input-string
+  // character covering that x position. The scroll index runs A→Z over the
+  // first half of the cycle and Z→A over the second half. A cell freezes
+  // when the scroll index reaches its target letter — so all cells settle
+  // at their targets simultaneously at the peak (progress = 1), giving a
+  // brief moment where the word reads cleanly. On the way out, the scroll
+  // reverses and every cell unwinds back toward A.
+  // progress ∈ [0, 1] = pingpong t01 from renderAnimationFrame.
+  const ALPHA = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  // scrollIdx 0..26: 0 = show A, 26 = show target.
+  const scrollIdx = progress * 26;
+
   for(let y = yStart; y < yEnd; y += pixelSize){
     for(let x = 0; x < w; x += pixelSize){
       const idx = (x + y * w) * 4;
       const isText = bufferPixels[idx] === 255;
-      const normal = isText ? 1 : 0;
-      const inverted = isText ? 0 : 1;
-      const alpha = normal + (inverted - normal) * progress;
-      if(alpha <= 0.001) continue;
+      if(!isText) continue;
 
-      // During cross-fade, swap to random A–Z with probability (progress).
-      let letter;
-      if(Math.random() > progress){
-        const found = letterPositions.find(p => x >= p.start && x < p.end);
-        letter = found ? found.char : ' ';
+      const found = letterPositions.find(p => x >= p.start && x < p.end);
+      const targetChar = found ? found.char : '';
+      if(!targetChar) continue;
+      const upper = targetChar.toUpperCase();
+      const targetIdx = upper.charCodeAt(0) - 65;
+      let displayChar;
+      if(targetIdx < 0 || targetIdx > 25){
+        // Non-letter target — show it once scroll passes its slot.
+        displayChar = scrollIdx >= 13 ? targetChar : ALPHA[Math.min(25, Math.floor(scrollIdx))];
       } else {
-        letter = String.fromCharCode(65 + Math.floor(Math.random() * 26));
+        const cur = Math.min(targetIdx, Math.floor(scrollIdx));
+        displayChar = ALPHA[cur];
+        if(targetChar !== upper) displayChar = displayChar.toLowerCase();
       }
 
-      ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+      ctx.fillStyle = '#ffffff';
       if(pixelSize < 10){
         ctx.fillRect(x, y, pixelSize, pixelSize);
       } else {
-        ctx.fillText(letter, x + pixelSize / 2, y + pixelSize / 2 + yOff);
+        ctx.fillText(displayChar, x + pixelSize / 2, y + pixelSize / 2 + yOff);
       }
     }
   }
@@ -192,10 +206,9 @@ function redraw(){
 const RASTER_KEYS = new Set(['text','textSize','bold','italic']);
 
 function renderAnimationFrame(t_loop){
-  // pingpong 0→1→0 over the cycle drives both the appear/disappear and the
-  // invert sweep so the rest state is text-less and peak is fully revealed.
+  // pingpong 0→1→0: scroll up A→target over first half, target→A second half.
   const t01 = (1 - Math.cos(t_loop * 2 * Math.PI)) / 2;
-  if(dirty.raster){ rasterizeText(); dirty.raster = false; }
+  rasterizeText();
   paint(t01);
 }
 
