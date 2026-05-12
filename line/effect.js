@@ -203,21 +203,20 @@ function paint(){
 
 function redraw(){ rasterizeText(); invalidateRaster(); buildLines(); paint(); }
 
-function applyAnimationT(t01){
-  // Float interpolation — keep canvas-side params smooth even though the
-  // slider visually snaps to its step. Direction flips the angle sign so
-  // animation can sweep clockwise (+1) or counter-clockwise (-1).
+// Angle gets its own monotonic sweep — one full 360° rotation per cycle so
+// the start and end frames coincide naturally (no reversal). Other params
+// still pingpong via t01 so the text intro/outro reads cleanly.
+function applyAnimationT(t01, t_full){
   const dir = (params.direction === undefined ? 1 : (params.direction ? 1 : -1));
-  const a  = lerp(ANIM.angle.rest, ANIM.angle.peak * dir, t01);
-  const ls = Math.max(1, lerp(ANIM.lineSize.rest, ANIM.lineSize.peak, t01));
-  const lg = Math.max(0, lerp(ANIM.lineSpacing.rest, ANIM.lineSpacing.peak, t01));
+  const a   = ((t_full * 360 * dir) % 360 + 360) % 360;
+  const ls  = Math.max(1, lerp(ANIM.lineSize.rest, ANIM.lineSize.peak, t01));
+  const lg  = Math.max(0, lerp(ANIM.lineSpacing.rest, ANIM.lineSpacing.peak, t01));
   if(gui){
     gui.rows.get('angle')?._write(a);
     gui.rows.get('lineSize')?._write(ls);
     gui.rows.get('lineSpacing')?._write(lg);
   }
-  // Override the quantised values the slider just wrote so the canvas sees
-  // smooth floats. Without this, integer-step sliders make the animation jitter.
+  // Override quantised slider values so the canvas sees smooth floats.
   params.angle = a;
   params.lineSize = ls;
   params.lineSpacing = lg;
@@ -228,7 +227,7 @@ function applyAnimationT(t01){
 function renderAnimationFrame(t_loop){
   _envScale = Math.sin(t_loop * Math.PI);
   const t01 = (1 - Math.cos(t_loop * 2 * Math.PI)) / 2;
-  applyAnimationT(t01);
+  applyAnimationT(t01, t_loop);
   rasterizeText();
   invalidateRaster();
   buildLines();
