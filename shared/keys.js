@@ -88,6 +88,8 @@
 
   function init(){
     buildSplash();
+    const helpBtn = document.getElementById('help-btn');
+    if(helpBtn) helpBtn.addEventListener('click', showSplash);
     if(!localStorage.getItem(SEEN)) showSplash();
   }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
