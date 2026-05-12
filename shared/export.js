@@ -1,8 +1,12 @@
-// Shared export helpers — PNG and 30 s MP4/WebM recording of the canvas.
-// Each effect page calls WAExport.wire({canvas, name}) once.
+// Shared export helpers — PNG and 15 s perfectly-loopable MP4 of the canvas.
+// The MP4 forces the active effect into Animate mode, resets the cycle so
+// recording begins at the rest state (t=0), captures exactly one cycle, then
+// restores the prior animate state. Frame 0 and the final frame produce the
+// same canvas content for a seamless loop.
 (function(){
   'use strict';
-  const RECORD_SECONDS = 30;
+  const RECORD_SECONDS = 15;
+  const FPS = 30;
 
   function pickMime(){
     const tries = [
@@ -38,7 +42,7 @@
     const mime = pickMime();
     if(!mime){ onError && onError('MediaRecorder not supported'); return null; }
     const ext = mime.startsWith('video/mp4') ? 'mp4' : 'webm';
-    const stream = canvas.captureStream(30);
+    const stream = canvas.captureStream(FPS);
     const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 8_000_000 });
     const chunks = [];
     rec.ondataavailable = (e) => { if(e.data && e.data.size > 0) chunks.push(e.data); };
@@ -48,13 +52,27 @@
       onDone && onDone(blob);
     };
     rec.onerror = (ev) => { onError && onError(ev.error || ev); };
+
+    // Reset the active effect's animation cycle so recording begins at t=0
+    // (the rest state). One RAF lets the first frame paint before capture.
+    if(window.WAEffect && window.WAEffect.beginRecording){
+      window.WAEffect.beginRecording();
+    }
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
     rec.start(250);
     const t0 = performance.now();
     const tick = () => {
       const elapsed = (performance.now() - t0) / 1000;
       const pct = Math.min(1, elapsed / RECORD_SECONDS);
       onProgress && onProgress(pct);
-      if(elapsed >= RECORD_SECONDS){ rec.stop(); return; }
+      if(elapsed >= RECORD_SECONDS){
+        rec.stop();
+        if(window.WAEffect && window.WAEffect.endRecording){
+          window.WAEffect.endRecording();
+        }
+        return;
+      }
       requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
@@ -82,5 +100,5 @@
     }
   }
 
-  window.WAExport = { wire, exportPNG, exportVideo, RECORD_SECONDS };
+  window.WAExport = { wire, exportPNG, exportVideo, RECORD_SECONDS, FPS };
 })();

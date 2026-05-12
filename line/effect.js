@@ -16,7 +16,17 @@
 
 const STRIPED_ANIMALS = ["Zebra","Tiger","Okapi","Bongo","Quagga","Tapir","Numbat","Thylacine","Zonkey","Zorse","Quoll","Hyena","Serval","Civet","Caracal"];
 const ELECTRIC_COLORS = ["#000000","#ADD8E6","#FF96FF","#ffcf37","#B5651D","#ff781e","#b6b6ed","#00FF00","#FF3333"];
-const ANIMATION_DURATION = 15000;
+const CYCLE_MS = 15000;
+// Per-param rest (t=0) and peak (t=0.5) values. Animation curve is a smooth
+// (1 - cos)/2 pingpong so t01 sweeps 0 → 1 → 0 over CYCLE_MS, making the
+// recording perfectly loopable end-to-start.
+const ANIM = {
+  angle:       { rest:   0, peak:  90 },
+  lineSize:    { rest:  14, peak:   5 },
+  lineSpacing: { rest:   0, peak:   4 },
+};
+function lerp(a, b, t){ return a + (b - a) * t; }
+function pingpongT(elapsed){ return (1 - Math.cos((elapsed % CYCLE_MS) / CYCLE_MS * Math.PI * 2)) / 2; }
 
 function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
 
@@ -33,6 +43,7 @@ const params = {
   bg: pick(ELECTRIC_COLORS),
   invert: Math.random() < 0.5,
   rounded: true,
+  direction: true, // true = clockwise sweep during animate, false = counter-clockwise
 };
 if(window.WAState) window.WAState.hydrate(params);
 
@@ -183,12 +194,30 @@ function paint(){
 
 function redraw(){ rasterizeText(); invalidateRaster(); buildLines(); paint(); }
 
+function applyAnimationT(t01){
+  // Float interpolation — keep canvas-side params smooth even though the
+  // slider visually snaps to its step. Direction flips the angle sign so
+  // animation can sweep clockwise (+1) or counter-clockwise (-1).
+  const dir = (params.direction === undefined ? 1 : (params.direction ? 1 : -1));
+  const a  = lerp(ANIM.angle.rest, ANIM.angle.peak * dir, t01);
+  const ls = Math.max(1, lerp(ANIM.lineSize.rest, ANIM.lineSize.peak, t01));
+  const lg = Math.max(0, lerp(ANIM.lineSpacing.rest, ANIM.lineSpacing.peak, t01));
+  if(gui){
+    gui.rows.get('angle')?._write(a);
+    gui.rows.get('lineSize')?._write(ls);
+    gui.rows.get('lineSpacing')?._write(lg);
+  }
+  // Override the quantised values the slider just wrote so the canvas sees
+  // smooth floats. Without this, integer-step sliders make the animation jitter.
+  params.angle = a;
+  params.lineSize = ls;
+  params.lineSpacing = lg;
+}
+
 function animationLoop(){
   if(!params.animate) return;
-  const elapsed = (performance.now() - animationStartTime) % ANIMATION_DURATION;
-  const progress = elapsed / ANIMATION_DURATION;
-  params.angle = progress * 180;
-  gui.rows.get('angle')._write(params.angle);
+  const elapsed = performance.now() - animationStartTime;
+  applyAnimationT(pingpongT(elapsed));
   if(dirty.raster){ rasterizeText(); invalidateRaster(); dirty.raster = false; }
   buildLines();
   paint();
@@ -205,6 +234,25 @@ function toggleAnimation(){
     animationId = null;
   }
 }
+
+// Recording protocol — export.js calls these to force a clean 15 s loop.
+let _wasAnimating = false;
+window.WAEffect = {
+  cycleMs: CYCLE_MS,
+  beginRecording(){
+    _wasAnimating = params.animate;
+    if(!_wasAnimating){ params.animate = true; gui?.rows.get('animate')?._write(true); }
+    animationStartTime = performance.now();
+    if(!animationId) animationLoop();
+  },
+  endRecording(){
+    if(!_wasAnimating){
+      params.animate = false;
+      gui?.rows.get('animate')?._write(false);
+      if(animationId){ cancelAnimationFrame(animationId); animationId = null; }
+    }
+  },
+};
 
 function handleMouseMove(e){
   const r = cv.getBoundingClientRect();

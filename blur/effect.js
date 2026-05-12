@@ -10,9 +10,13 @@
 'use strict';
 
 const ELECTRIC_COLORS = ["#000000","#ADD8E6","#FF96FF","#ffcf37","#B5651D","#ff781e","#b6b6ed","#00FF00","#FF3333"];
-const ANIMATION_DURATION = 1500;
-const ANIM_MIN = 4;
-const ANIM_MAX = 28;
+const CYCLE_MS = 15000;
+const ANIM = {
+  blurAmount:    { rest:  0, peak: 28 },
+  letterSpacing: { rest: -10, peak: -50 },
+};
+function lerp(a, b, t){ return a + (b - a) * t; }
+function pingpongT(elapsed){ return (1 - Math.cos((elapsed % CYCLE_MS) / CYCLE_MS * Math.PI * 2)) / 2; }
 
 function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
 
@@ -20,6 +24,7 @@ const params = {
   blurAmount: 10,
   letterSpacing: -40,
   invert: false,
+  motion: false,        // gaussian (false) vs horizontal motion blur (true)
   animate: false,
   interactive: false,
   text: (window.WAState && window.WAState.randomPhrase) ? window.WAState.randomPhrase('dreamy') : 'hello',
@@ -121,14 +126,28 @@ function rasterizeText(){
 // We multiply by DPR so the σ specified in params.blurAmount is interpreted
 // in CSS px, giving stable visual blur radius across display densities.
 function buildBlur(){
-  const w = cssW(), h = cssH();
   const radius = Math.max(0, params.blurAmount);
   bctx.save();
   bctx.setTransform(1, 0, 0, 1, 0, 0);
   bctx.clearRect(0, 0, blurBuf.width, blurBuf.height);
-  bctx.filter = radius > 0 ? `blur(${radius * DPR}px)` : 'none';
-  bctx.drawImage(textBuf, 0, 0);
-  bctx.filter = 'none';
+  if(params.motion && radius > 0){
+    // Motion blur — drag a streak of the text along its baseline. Each ghost
+    // is alpha-blended; combined opacity ~1 at any in-trail pixel.
+    const steps = Math.max(1, Math.round(radius * 2));
+    const spread = radius * DPR * 2;
+    bctx.globalAlpha = 1 / steps;
+    for(let i = 0; i <= steps; i++){
+      const dx = -spread / 2 + (spread * i) / steps;
+      bctx.drawImage(textBuf, dx, 0);
+    }
+    bctx.globalAlpha = 1;
+  } else if(radius > 0){
+    bctx.filter = `blur(${radius * DPR}px)`;
+    bctx.drawImage(textBuf, 0, 0);
+    bctx.filter = 'none';
+  } else {
+    bctx.drawImage(textBuf, 0, 0);
+  }
   bctx.restore();
   bctx.setTransform(DPR, 0, 0, DPR, 0, 0);
 }
@@ -169,29 +188,26 @@ function paint(){
 
 function redraw(){ rasterizeText(); buildBlur(); paint(); }
 
-// Multi-pass cubic-bezier ease — same as slice's heavyEase.
-function bezier1d(p0, p1, p2, p3, t){ const u = 1 - t; return u*u*u*p0 + 3*u*u*t*p1 + 3*u*t*t*p2 + t*t*t*p3; }
-function heavyEase(t){
-  let y = bezier1d(0, 0.02, 0.98, 1, t);
-  y = bezier1d(0, 0, 1, 1, y);
-  y = bezier1d(0, 0.01, 0.99, 1, y);
-  y = bezier1d(0, 0, 1, 1, y);
-  y = bezier1d(0, 0.01, 0.99, 1, y);
-  return y;
+function applyAnimationT(t01){
+  // Float interpolation for smooth blur growth.
+  const b = Math.max(0, lerp(ANIM.blurAmount.rest, ANIM.blurAmount.peak, t01));
+  const l = lerp(ANIM.letterSpacing.rest, ANIM.letterSpacing.peak, t01);
+  if(gui){
+    gui.rows.get('blurAmount')?._write(b);
+    gui.rows.get('letterSpacing')?._write(l);
+  }
+  params.blurAmount = b;
+  params.letterSpacing = l;
+  rasterizeText();
 }
 
 function animationLoop(){
   if(!params.animate) return;
-  const elapsed = (performance.now() - animationStartTime) % (ANIMATION_DURATION * 2);
-  let progress = elapsed / ANIMATION_DURATION;
-  if(progress >= 1) progress = 2 - progress;
-  const eased = heavyEase(progress);
-  params.blurAmount = Math.round(ANIM_MIN + eased * (ANIM_MAX - ANIM_MIN));
-  if(gui) gui.rows.get('blurAmount')?._write(params.blurAmount);
-  if(dirty.raster){ rasterizeText(); dirty.raster = false; }
+  const elapsed = performance.now() - animationStartTime;
+  applyAnimationT(pingpongT(elapsed));
   buildBlur();
   paint();
-  dirty.build = dirty.paint = false;
+  dirty.raster = dirty.build = dirty.paint = false;
   animationId = requestAnimationFrame(animationLoop);
 }
 
@@ -204,6 +220,24 @@ function toggleAnimation(){
     animationId = null;
   }
 }
+
+let _wasAnimating = false;
+window.WAEffect = {
+  cycleMs: CYCLE_MS,
+  beginRecording(){
+    _wasAnimating = params.animate;
+    if(!_wasAnimating){ params.animate = true; gui?.rows.get('animate')?._write(true); }
+    animationStartTime = performance.now();
+    if(!animationId) animationLoop();
+  },
+  endRecording(){
+    if(!_wasAnimating){
+      params.animate = false;
+      gui?.rows.get('animate')?._write(false);
+      if(animationId){ cancelAnimationFrame(animationId); animationId = null; }
+    }
+  },
+};
 
 function handleMouseMove(e){
   if(!params.interactive || params.animate) return;

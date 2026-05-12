@@ -14,7 +14,14 @@
 
 const SPEEDY_ANIMALS = ["Cheetah","Falcon","Sailfish","Marlin","Gazelle","Hare","Ostrich","Lion","Leopard"];
 const ELECTRIC_COLORS = ["#000000","#ADD8E6","#FF96FF","#ffcf37","#B5651D","#ff781e","#b6b6ed","#00FF00","#FF3333"];
-const ANIMATION_DURATION = 1000;
+const CYCLE_MS = 15000;
+const ANIM = {
+  offset:      { rest: 0,   peak: 40 },
+  splits:      { rest: 2,   peak: 16 },
+  textStretch: { rest: 1,   peak: 1.3 },
+};
+function lerp(a, b, t){ return a + (b - a) * t; }
+function pingpongT(elapsed){ return (1 - Math.cos((elapsed % CYCLE_MS) / CYCLE_MS * Math.PI * 2)) / 2; }
 
 function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
 
@@ -106,18 +113,19 @@ function rasterizeText(){
   };
 }
 
-// Multi-pass cubic bezier easing that holds at 0 and 1, snaps through middle.
-function bezier1d(p0, p1, p2, p3, t){
-  const u = 1 - t;
-  return u*u*u*p0 + 3*u*u*t*p1 + 3*u*t*t*p2 + t*t*t*p3;
-}
-function heavyEase(t){
-  let y = bezier1d(0, 0.02, 0.98, 1, t);
-  y = bezier1d(0, 0, 1, 1, y);
-  y = bezier1d(0, 0.01, 0.99, 1, y);
-  y = bezier1d(0, 0, 1, 1, y);
-  y = bezier1d(0, 0.01, 0.99, 1, y);
-  return y;
+function applyAnimationT(t01){
+  // Float interpolation for smooth motion; splits must stay integer (grid math).
+  const o = lerp(ANIM.offset.rest, ANIM.offset.peak, t01);
+  const s = lerp(ANIM.splits.rest, ANIM.splits.peak, t01);
+  const stretch = lerp(ANIM.textStretch.rest, ANIM.textStretch.peak, t01);
+  if(gui){
+    gui.rows.get('offset')?._write(o);
+    gui.rows.get('splits')?._write(s);
+    gui.rows.get('textStretch')?._write(stretch);
+  }
+  params.offset = o;
+  params.splits = Math.max(2, Math.floor(s));
+  params.textStretch = stretch;
 }
 
 function paint(){
@@ -172,12 +180,8 @@ function redraw(){
 
 function animationLoop(){
   if(!params.animate) return;
-  const elapsed = (performance.now() - animationStartTime) % (ANIMATION_DURATION * 2);
-  let progress = elapsed / ANIMATION_DURATION;
-  if(progress >= 1) progress = 2 - progress;
-  const eased = heavyEase(progress);
-  params.offset = -50 + eased * 100;
-  gui.rows.get('offset')._write(params.offset);
+  const elapsed = performance.now() - animationStartTime;
+  applyAnimationT(pingpongT(elapsed));
   if(dirty.raster){ rasterizeText(); dirty.raster = false; }
   paint();
   dirty.paint = false;
@@ -193,6 +197,24 @@ function toggleAnimation(){
     animationId = null;
   }
 }
+
+let _wasAnimating = false;
+window.WAEffect = {
+  cycleMs: CYCLE_MS,
+  beginRecording(){
+    _wasAnimating = params.animate;
+    if(!_wasAnimating){ params.animate = true; gui?.rows.get('animate')?._write(true); }
+    animationStartTime = performance.now();
+    if(!animationId) animationLoop();
+  },
+  endRecording(){
+    if(!_wasAnimating){
+      params.animate = false;
+      gui?.rows.get('animate')?._write(false);
+      if(animationId){ cancelAnimationFrame(animationId); animationId = null; }
+    }
+  },
+};
 
 
 const RASTER_KEYS = new Set(['text','textSize','bold','italic']);

@@ -12,9 +12,14 @@
 'use strict';
 
 const ELECTRIC_COLORS = ["#000000","#ADD8E6","#FF96FF","#ffcf37","#B5651D","#ff781e","#b6b6ed","#00FF00","#FF3333"];
-const ANIMATION_DURATION = 1500; // ms per half-cycle (3s full ping-pong)
-const ANIM_MIN = 25;
-const ANIM_MAX = 100;
+const CYCLE_MS = 15000;
+const ANIM = {
+  pixelDistortion: { rest: 100, peak: 30 },
+  pixelSize:       { rest:  10, peak: 18 },
+  pixelSpacing:    { rest:   0, peak:  3 },
+};
+function lerp(a, b, t){ return a + (b - a) * t; }
+function pingpongT(elapsed){ return (1 - Math.cos((elapsed % CYCLE_MS) / CYCLE_MS * Math.PI * 2)) / 2; }
 
 function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
 
@@ -195,18 +200,16 @@ function remap(v, a, b, c, d){
   return c + (d - c) * ((v - a) / (b - a));
 }
 
-// Multi-pass cubic bezier ease — same shape as slice/blur. Lingers at endpoints.
-function bezier1d(p0, p1, p2, p3, t){
-  const u = 1 - t;
-  return u*u*u*p0 + 3*u*u*t*p1 + 3*u*t*t*p2 + t*t*t*p3;
-}
-function heavyEase(t){
-  let y = bezier1d(0, 0.02, 0.98, 1, t);
-  y = bezier1d(0, 0, 1, 1, y);
-  y = bezier1d(0, 0.01, 0.99, 1, y);
-  y = bezier1d(0, 0, 1, 1, y);
-  y = bezier1d(0, 0.01, 0.99, 1, y);
-  return y;
+function applyAnimationT(t01){
+  params.pixelDistortion = Math.max(0, Math.round(lerp(ANIM.pixelDistortion.rest, ANIM.pixelDistortion.peak, t01)));
+  params.pixelSize       = Math.max(1, Math.round(lerp(ANIM.pixelSize.rest, ANIM.pixelSize.peak, t01)));
+  params.pixelSpacing    = Math.max(0, Math.round(lerp(ANIM.pixelSpacing.rest, ANIM.pixelSpacing.peak, t01)));
+  if(gui){
+    gui.rows.get('pixelDistortion')?._write(params.pixelDistortion);
+    gui.rows.get('pixelSize')?._write(params.pixelSize);
+    gui.rows.get('pixelSpacing')?._write(params.pixelSpacing);
+  }
+  return null;
 }
 
 function redraw(){
@@ -217,13 +220,8 @@ function redraw(){
 
 function animationLoop(){
   if(!params.animate) return;
-  const elapsed = (performance.now() - animationStartTime) % (ANIMATION_DURATION * 2);
-  let progress = elapsed / ANIMATION_DURATION;
-  if(progress >= 1) progress = 2 - progress;
-  const eased = heavyEase(progress);
-  // Animate pixelDistortion (primary, visible drop-in/out).
-  params.pixelDistortion = Math.round(ANIM_MIN + eased * (ANIM_MAX - ANIM_MIN));
-  if(gui && gui.rows.get('pixelDistortion')) gui.rows.get('pixelDistortion')._write(params.pixelDistortion);
+  const elapsed = performance.now() - animationStartTime;
+  applyAnimationT(pingpongT(elapsed));
   // Regenerate distortion every frame for the boiling-grain look.
   buildDistortion();
   if(dirty.raster){ rasterizeText(); dirty.raster = false; }
@@ -241,6 +239,24 @@ function toggleAnimation(){
     animationId = null;
   }
 }
+
+let _wasAnimating = false;
+window.WAEffect = {
+  cycleMs: CYCLE_MS,
+  beginRecording(){
+    _wasAnimating = params.animate;
+    if(!_wasAnimating){ params.animate = true; gui?.rows.get('animate')?._write(true); }
+    animationStartTime = performance.now();
+    if(!animationId) animationLoop();
+  },
+  endRecording(){
+    if(!_wasAnimating){
+      params.animate = false;
+      gui?.rows.get('animate')?._write(false);
+      if(animationId){ cancelAnimationFrame(animationId); animationId = null; }
+    }
+  },
+};
 
 // Keys that require a fresh text raster. pixelSize/Spacing change the grid
 // (so distortion needs rebuilding). pixelDistortion just rebuilds distortion.
