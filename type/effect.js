@@ -211,8 +211,12 @@ function redraw(){
 const RASTER_KEYS = new Set(['text','textSize','bold','italic']);
 
 function renderAnimationFrame(t_loop){
-  // pingpong 0→1→0: scroll up A→target over first half, target→A second half.
-  const t01 = (1 - Math.cos(t_loop * 2 * Math.PI)) / 2;
+  // pingpong 0→1→0 via sin envelope: peaks mid-cycle, returns exactly to 0
+  // at both endpoints. sin(π·t_wrapped) is identically 0 at t=0 and t=1
+  // (no float-precision drift from cos), so renderAt(0) and renderAt(1)
+  // are pixel-identical and the MP4 loops seamlessly at 7.5s.
+  const t_wrapped = ((t_loop % 1) + 1) % 1;
+  const t01 = Math.sin(Math.PI * t_wrapped);
   rasterizeText();
   paint(t01);
 }
