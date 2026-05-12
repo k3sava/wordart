@@ -15,13 +15,40 @@ const ELECTRIC_COLORS = ["#000000","#ADD8E6","#FF96FF","#ffcf37","#B5651D","#ff7
 const CYCLE_MS = 15000;
 // Intro/outro IS the dither effect: rest = all dots dropped (no text visible),
 // peak = all dots present (text reads clearly). Dots resolve in, then out.
+// pixelSize breathes the other way: thicker grain at rest, tight dots at the
+// legible peak — smaller cells = more samples per glyph = sharper read.
+// cellRotation sweeps 0 → 360° monotonically across the cycle so squares
+// turn into diamonds and back; seamless because 360° === 0° visually.
 const ANIM = {
   pixelDistortion: { rest:  0, peak: 100 },
-  pixelSize:       { rest: 14, peak:  10 },
+  pixelSize:       { rest: 14, peak:   8 },
   pixelSpacing:    { rest:  2, peak:   0 },
+  cellRotation:    { start: 0, end: 360 },
 };
 function lerp(a, b, t){ return a + (b - a) * t; }
 function pingpongT(elapsed){ return (1 - Math.cos((elapsed % CYCLE_MS) / CYCLE_MS * Math.PI * 2)) / 2; }
+
+// Deterministic per-frame RNG. Seeded by an integer derived from t_loop so
+// frame 0 and frame N share the same seed (and therefore the same distortion
+// map). Within a frame the grain still "boils" because each cell pulls a
+// fresh value from the sequence. mulberry32 — tiny, fast, good enough.
+let _rng = Math.random;
+function mulberry32(seed){
+  let a = seed >>> 0;
+  return function(){
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function seedFromT(t01){
+  // Map t01 ∈ [0,1) to an integer. t=1 collapses to t=0 (mod 1) so the loop
+  // closes pixel-perfect. Resolution ~ 100k discrete frames — plenty.
+  const wrapped = ((t01 % 1) + 1) % 1;
+  return Math.floor(wrapped * 100003) + 1;
+}
 
 function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
 
@@ -29,6 +56,7 @@ const params = {
   pixelDistortion: 80 + Math.floor(Math.random() * 21), // 80..100
   pixelSize: 10,
   pixelSpacing: 0,
+  cellRotation: 0,
   rounded: Math.random() < 0.5,
   invert: Math.random() < 0.5,
   animate: false,
@@ -130,8 +158,9 @@ function buildDistortion(){
     distortionMap = new Uint8Array(n);
   }
   const th = params.pixelDistortion;
+  const rnd = _rng;
   for(let i = 0; i < n; i++){
-    distortionMap[i] = (Math.random() * 100) < th ? 1 : 0;
+    distortionMap[i] = (rnd() * 100) < th ? 1 : 0;
   }
 }
 
@@ -159,6 +188,13 @@ function paint(){
   const rounded = params.rounded;
   const inv = params.invert;
   const interactive = params.interactive && !params.animate;
+  // Only rotate visible square cells with enough body to make rotation read.
+  // Below ~8px the diamond/square delta is sub-pixel noise and costs more
+  // than it shows.
+  const rotDeg = (!rounded && ps >= 8) ? (params.cellRotation || 0) % 360 : 0;
+  const rotRad = rotDeg * Math.PI / 180;
+  const useRot = rotRad !== 0;
+  const cosR = Math.cos(rotRad), sinR = Math.sin(rotRad);
 
   let index = 0;
   for(let y = 0; y < h; y += stride){
@@ -175,20 +211,34 @@ function paint(){
           const dx = cx - mouseX, dy = cy - mouseY;
           const d = Math.sqrt(dx*dx + dy*dy);
           if(d < HOVER_RADIUS){
-            // Same cosine remap the reference uses.
             scale = remap(Math.cos(d / HOVER_RADIUS * Math.PI), 1, -1, MAX_GROWTH, 1);
           }
         }
         const adj = Math.round(ps * scale);
-        const px = Math.round(x + ps / 2 - adj / 2);
-        const py = Math.round(y + ps / 2 - adj / 2);
         if(rounded){
           const cx = Math.round(x + ps / 2);
           const cy = Math.round(y + ps / 2);
           ctx.beginPath();
           ctx.ellipse(cx, cy, adj / 2, adj / 2, 0, 0, Math.PI * 2);
           ctx.fill();
+        } else if(useRot){
+          // Rotated square = diamond at 45°. Draw as a 4-point path around
+          // the cell centre; cheaper than setTransform per cell.
+          const cx = x + ps / 2;
+          const cy = y + ps / 2;
+          const r = adj / 2;
+          // Corners of the square in local space, rotated.
+          const xr = cosR * r, yr = sinR * r;
+          ctx.beginPath();
+          ctx.moveTo(cx - xr - (-sinR * r), cy - yr - cosR * r); // (-r,-r) rotated
+          ctx.lineTo(cx + xr - (-sinR * r), cy + yr - cosR * r); // ( r,-r)
+          ctx.lineTo(cx + xr + (-sinR * r), cy + yr + cosR * r); // ( r, r)
+          ctx.lineTo(cx - xr + (-sinR * r), cy - yr + cosR * r); // (-r, r)
+          ctx.closePath();
+          ctx.fill();
         } else {
+          const px = Math.round(x + ps / 2 - adj / 2);
+          const py = Math.round(y + ps / 2 - adj / 2);
           ctx.fillRect(px, py, adj, adj);
         }
       }
@@ -202,14 +252,24 @@ function remap(v, a, b, c, d){
   return c + (d - c) * ((v - a) / (b - a));
 }
 
-function applyAnimationT(t01){
-  params.pixelDistortion = Math.max(0, Math.round(lerp(ANIM.pixelDistortion.rest, ANIM.pixelDistortion.peak, t01)));
-  params.pixelSize       = Math.max(1, Math.round(lerp(ANIM.pixelSize.rest, ANIM.pixelSize.peak, t01)));
-  params.pixelSpacing    = Math.max(0, Math.round(lerp(ANIM.pixelSpacing.rest, ANIM.pixelSpacing.peak, t01)));
+function applyAnimationT(t01, tLoop){
+  // t01 is the pingpong shape (0 at edges, 1 at midpoint). tLoop is the raw
+  // 0..1 loop position used for the monotonic rotation sweep.
+  // Float-precise params live on a side channel so the visible slider can
+  // snap to int without breaking smooth interpolation.
+  const pd = Math.max(0, lerp(ANIM.pixelDistortion.rest, ANIM.pixelDistortion.peak, t01));
+  const psF = Math.max(1, lerp(ANIM.pixelSize.rest, ANIM.pixelSize.peak, t01));
+  const spF = Math.max(0, lerp(ANIM.pixelSpacing.rest, ANIM.pixelSpacing.peak, t01));
+  const rot = lerp(ANIM.cellRotation.start, ANIM.cellRotation.end, ((tLoop % 1) + 1) % 1);
+  params.pixelDistortion = Math.round(pd);
+  params.pixelSize       = Math.round(psF);
+  params.pixelSpacing    = Math.round(spF);
+  params.cellRotation    = rot;
   if(gui){
     gui.rows.get('pixelDistortion')?._write(params.pixelDistortion);
     gui.rows.get('pixelSize')?._write(params.pixelSize);
     gui.rows.get('pixelSpacing')?._write(params.pixelSpacing);
+    gui.rows.get('cellRotation')?._write(Math.round(rot));
   }
   return null;
 }
@@ -222,8 +282,13 @@ function redraw(){
 
 function renderAnimationFrame(t_loop){
   const t01 = (1 - Math.cos(t_loop * 2 * Math.PI)) / 2;
-  applyAnimationT(t01);
+  applyAnimationT(t01, t_loop);
+  // Seed the per-frame grain by t_loop so the loop closes exactly: seed at
+  // t=0 equals seed at t=1. Each frame still rebuilds (grain "boils") but
+  // the sequence at the endpoints is identical.
+  _rng = mulberry32(seedFromT(t_loop));
   buildDistortion();
+  _rng = Math.random;
   rasterizeText();
   paint();
 }
@@ -265,6 +330,7 @@ window.WAEffect = {
 // rounded/invert/bg are paint-only.
 const RASTER_KEYS = new Set(['text','textSize','bold','italic']);
 const BUILD_KEYS  = new Set(['pixelSize','pixelSpacing','pixelDistortion']);
+const PAINT_KEYS  = new Set(['cellRotation']);
 
 function handleMouseMove(e){
   const r = cv.getBoundingClientRect();
