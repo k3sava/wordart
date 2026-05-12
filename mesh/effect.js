@@ -23,8 +23,8 @@ const CYCLE_MS = 15000;
 const ANIM = {
   amplitudePeak: 160, // at t=0 and t=1
   ampYPeak:      110, // at t=0.25 and t=0.75
-  freqRest:        4,
-  freqPeak:        8,
+  freqRest:        6,
+  freqPeak:        14,
   phaseTurns:      2, // total rotations across one cycle
 };
 function lerp(a, b, t){ return a + (b - a) * t; }

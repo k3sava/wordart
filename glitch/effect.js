@@ -27,9 +27,9 @@ const CYCLE_MS = 15000;
 // Curve amplitudes (peaks, not rest values — wave does the rest=0 work).
 const ANIM = {
   rgbOffsetAmp:  120,
-  tearAmountAmp:  90,
-  tearDensityHi:  70,
-  tearDensityLo:  10,
+  tearAmountAmp:  55,
+  tearDensityHi:  45,
+  tearDensityLo:  6,
   rollBandsPerCycle: 4,
 };
 function lerp(a, b, t){ return a + (b - a) * t; }
@@ -37,8 +37,8 @@ function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
 
 const params = {
   rgbOffset: 24,
-  tearAmount: 20,
-  tearDensity: 30,
+  tearAmount: 10,
+  tearDensity: 12,
   scanlines: 25,
   animate: false,
   interactive: false,

@@ -21,7 +21,7 @@ const CYCLE_MS = 15000;
 // turn into diamonds and back; seamless because 360° === 0° visually.
 const ANIM = {
   pixelDistortion: { rest:  0, peak: 100 },
-  pixelSize:       { rest: 14, peak:   8 },
+  pixelSize:       { rest: 14, peak:   5 },
   pixelSpacing:    { rest:  2, peak:   0 },
   cellRotation:    { start: 0, end: 360 },
 };

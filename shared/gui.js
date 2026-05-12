@@ -46,7 +46,10 @@
       const KEY = 'wa.panel.collapsed';
       const apply = (collapsed) => {
         this.el.classList.toggle('collapsed', !!collapsed);
+        document.body.classList.toggle('panel-collapsed', !!collapsed);
         handle.setAttribute('aria-label', collapsed ? 'Expand controls' : 'Collapse controls');
+        // Effects size to cv.clientWidth — kick a resize so they re-rasterize.
+        window.dispatchEvent(new Event('resize'));
       };
       apply(localStorage.getItem(KEY) === '1');
       handle.addEventListener('click', () => {

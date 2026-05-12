@@ -31,8 +31,8 @@ const CYCLE_MS = 15000;
 // re-aligned grid). Text is readable through the dots there.
 const ANIM = {
   dotScale:    { peak: 130 },              // sin(πt) * peak
-  cellSizeMid: 14,                          // mean cell size in px
-  cellSizeAmp: 8,                           // ± px swing via cos(2πt)
+  cellSizeMid: 10,                          // mean cell size in px
+  cellSizeAmp: 6,                           // ± px swing via cos(2πt)
   softnessMid: 4,                           // mean softness px
   softnessAmp: 4,                           // ± px swing
   screenSpins: 1,                           // full revolutions per loop

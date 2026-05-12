@@ -22,8 +22,8 @@ const CYCLE_MS = 15000;
 // recording perfectly loopable end-to-start.
 const ANIM = {
   angle:       { rest:   0, peak:  90 },
-  lineSize:    { rest:  14, peak:   5 },
-  lineSpacing: { rest:   0, peak:   4 },
+  lineSize:    { rest:  14, peak:   3 },
+  lineSpacing: { rest:   0, peak:   2 },
 };
 function lerp(a, b, t){ return a + (b - a) * t; }
 function pingpongT(elapsed){ return (1 - Math.cos((elapsed % CYCLE_MS) / CYCLE_MS * Math.PI * 2)) / 2; }
