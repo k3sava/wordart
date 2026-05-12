@@ -444,7 +444,8 @@ html[data-theme="zen"] .wg-collapse{ border:1px solid rgba(58,58,50,.25); border
   }
 
   .theme-switcher-container{ flex:0 0 auto; }
-  .theme-switcher-pill{ width:26px; height:26px; }
+  .theme-switcher-pill{ width:24px; height:24px; border-radius:6px; }
+  .theme-switcher-pill-icon{ font-size:11px; }
 
   /* Splash: shrink title, stack the kbd grid single column */
   .wa-splash-inner{ padding:24px 20px; max-width:100%; }
