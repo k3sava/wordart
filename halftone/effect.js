@@ -11,10 +11,32 @@
 
 const ELECTRIC_COLORS = ["#000000","#ADD8E6","#FF96FF","#ffcf37","#B5651D","#ff781e","#b6b6ed","#00FF00","#FF3333"];
 const CYCLE_MS = 15000;
+// Halftone-native animation. Three+ params move together over a seamless 15s
+// loop (frame 0 == frame N exactly for deterministic params).
+//
+//   screenAngle  monotonic 0 → 360°. A rotating dot screen is the signature
+//                of offset printing; one full revolution per loop closes
+//                seamlessly because 0° and 360° are the same grid.
+//   dotScale     sin(πt) * peak — vanishes at t=0 and t=1 (loop closes),
+//                peaks at t=0.5 where the text "resolves" out of dust.
+//   cellSize     coarse → fine → coarse via cos(2πt). Returns to start.
+//                Coarse cells = crude rosette; fine = legible photoplate.
+//   softness     gentle breathe via cos(2πt); returns to start. Softer
+//                edges at peak give the dot radii a tonal gradient.
+//   gridOffset   tiny radial drift (cos(2πt), sin(2πt)) * GRID_DRIFT_PX —
+//                a full circle, so the pattern "walks" but lands home.
+//
+// Legibility moment lives near t≈0.5: dotScale peaks (full radius), cellSize
+// hits its fine minimum, screenAngle passes through 180° (a flipped but
+// re-aligned grid). Text is readable through the dots there.
 const ANIM = {
-  dotScale:    { rest:   0, peak: 130 },
-  screenAngle: { rest:  -8, peak:  22 },
-  cellSize:    { rest:  20, peak:  10 },
+  dotScale:    { peak: 130 },              // sin(πt) * peak
+  cellSizeMid: 14,                          // mean cell size in px
+  cellSizeAmp: 8,                           // ± px swing via cos(2πt)
+  softnessMid: 4,                           // mean softness px
+  softnessAmp: 4,                           // ± px swing
+  screenSpins: 1,                           // full revolutions per loop
+  gridDriftPx: 6,                           // grid origin orbit radius
 };
 function lerp(a, b, t){ return a + (b - a) * t; }
 function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
@@ -146,7 +168,7 @@ function paint(){
   const cell = Math.max(2, params.cellSize);
   const angle = params.screenAngle * Math.PI / 180;
   const cos = Math.cos(angle), sin = Math.sin(angle);
-  const cx = w / 2, cy = h / 2;
+  const cx = w / 2 + (params._gridDx || 0), cy = h / 2 + (params._gridDy || 0);
   // Diagonal of canvas — covers the rotated grid fully.
   const diag = Math.hypot(w, h);
   const cols = Math.ceil(diag / cell) + 2;
@@ -199,10 +221,25 @@ function paint(){
 
 function redraw(){ rasterizeText(); buildMask(); paint(); }
 
-function applyAnimationT(t01){
-  const ds = lerp(ANIM.dotScale.rest, ANIM.dotScale.peak, t01);
-  const sa = lerp(ANIM.screenAngle.rest, ANIM.screenAngle.peak, t01);
-  const cs = lerp(ANIM.cellSize.rest, ANIM.cellSize.peak, t01);
+function applyAnimationT(t_loop){
+  // Wrap t into [0,1) so renderAt(1.0) == renderAt(0.0) exactly.
+  const t = ((t_loop % 1) + 1) % 1;
+  const TAU = Math.PI * 2;
+
+  // dotScale: sin(πt) → 0 at endpoints, 1 at t=0.5. Seamless.
+  const ds = ANIM.dotScale.peak * Math.sin(Math.PI * t);
+
+  // screenAngle: monotonic 0→360 (one rosette revolution per loop).
+  const sa = (t * 360 * ANIM.screenSpins) % 360;
+
+  // cellSize: cos(2πt) breathes coarse(t=0,1) → fine(t=0.5) → coarse.
+  // Mid - amp at t=0.5 gives the fine cell when dotScale peaks → legible.
+  const cs = ANIM.cellSizeMid - ANIM.cellSizeAmp * Math.cos(TAU * t);
+
+  // Grid origin drift: a full circle, returns home at t=1.
+  params._gridDx = ANIM.gridDriftPx * Math.cos(TAU * t);
+  params._gridDy = ANIM.gridDriftPx * Math.sin(TAU * t);
+
   if(gui){
     gui.rows.get('dotScale')?._write(ds);
     gui.rows.get('screenAngle')?._write(sa);
@@ -214,8 +251,7 @@ function applyAnimationT(t01){
 }
 
 function renderAnimationFrame(t_loop){
-  const t01 = (1 - Math.cos(t_loop * 2 * Math.PI)) / 2;
-  applyAnimationT(t01);
+  applyAnimationT(t_loop);
   paint();
 }
 
@@ -239,7 +275,10 @@ function toggleAnimation(){
 
 window.WAEffect = {
   cycleMs: CYCLE_MS,
-  renderAt(t_loop){ renderAnimationFrame(t_loop); },
+  renderAt(t_loop){
+    if(!maskData){ rasterizeText(); buildMask(); }
+    renderAnimationFrame(t_loop);
+  },
   pauseRender(){ if(animationId){ cancelAnimationFrame(animationId); animationId = null; } },
   resumeRender(){
     if(params.animate && !animationId){
