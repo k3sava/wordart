@@ -5,20 +5,30 @@
 // lands at sub-CSS-pixel resolution and reads as a vector silhouette on
 // Retina rather than a 1-bit bitmap.
 //
-// Animate: ping-pongs blurAmount between 4 and 28 over 3 s with a heavy ease.
+// Animation is built FROM the primitives that make blur blur:
+//   - radius (gaussian σ): breathes |sin(2πt)|-shape so it lands at 0 TWICE
+//     per cycle. Those two crisp zeros are the legible moments.
+//   - letterSpacing: cosine breath through full negative→positive→negative
+//     range so glyphs collide, separate, then collide again. One full breath
+//     per cycle, phase-offset from the blur breath so legibility lands while
+//     spacing is mid-sweep (text is most readable at neutral-ish spacing).
+//   - motionAngle: monotonic 0→2π rotation. When user enables motion blur the
+//     streak walks the compass; angle stays float and wraps seamlessly.
 // Interactive: mouse X drives blurAmount, mouse Y drives letterSpacing.
 'use strict';
 
 const ELECTRIC_COLORS = ["#000000","#ADD8E6","#FF96FF","#ffcf37","#B5651D","#ff781e","#b6b6ed","#00FF00","#FF3333"];
 const CYCLE_MS = 15000;
-// Intro/outro IS the blur effect: rest = heavily blurred blob, peak = crisp.
-// Text emerges from the blur and dissolves back into it.
+// Radius peaks at quarter-cycles (t=0.25, t=0.75) and zeros at t=0, t=0.5, t=1.
+// Spacing breathes once over the cycle; its phase is shifted so peak spacing
+// chaos coincides with maximum blur, and crispness lands near neutral spacing.
 const ANIM = {
-  blurAmount:    { rest: 30, peak: 0 },
-  letterSpacing: { rest: -40, peak: -10 },
+  blurMax:       34,
+  blurFloor:     0,
+  spacingAmp:    60,   // sweeps -60 → +60 → -60
+  spacingBias:   -8,   // slight pull toward overlap so collisions feel intentional
 };
 function lerp(a, b, t){ return a + (b - a) * t; }
-function pingpongT(elapsed){ return (1 - Math.cos((elapsed % CYCLE_MS) / CYCLE_MS * Math.PI * 2)) / 2; }
 
 function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
 
@@ -29,6 +39,7 @@ const params = {
   motion: false,        // gaussian (false) vs horizontal motion blur (true)
   animate: false,
   interactive: false,
+  motionAngle: 0,       // radians; only visible when params.motion is true
   text: (window.WAState && window.WAState.randomPhrase) ? window.WAState.randomPhrase('dreamy') : 'hello',
   textSize: 400,
   bold: true,
@@ -133,14 +144,16 @@ function buildBlur(){
   bctx.setTransform(1, 0, 0, 1, 0, 0);
   bctx.clearRect(0, 0, blurBuf.width, blurBuf.height);
   if(params.motion && radius > 0){
-    // Motion blur — drag a streak of the text along its baseline. Each ghost
+    // Motion blur — drag a streak of the text along motionAngle. Each ghost
     // is alpha-blended; combined opacity ~1 at any in-trail pixel.
     const steps = Math.max(1, Math.round(radius * 2));
     const spread = radius * DPR * 2;
+    const ang = params.motionAngle || 0;
+    const ux = Math.cos(ang), uy = Math.sin(ang);
     bctx.globalAlpha = 1 / steps;
     for(let i = 0; i <= steps; i++){
-      const dx = -spread / 2 + (spread * i) / steps;
-      bctx.drawImage(textBuf, dx, 0);
+      const s = -spread / 2 + (spread * i) / steps;
+      bctx.drawImage(textBuf, s * ux, s * uy);
     }
     bctx.globalAlpha = 1;
   } else if(radius > 0){
@@ -190,23 +203,34 @@ function paint(){
 
 function redraw(){ rasterizeText(); buildBlur(); paint(); }
 
-function applyAnimationT(t01){
-  // Float interpolation for smooth blur growth.
-  const b = Math.max(0, lerp(ANIM.blurAmount.rest, ANIM.blurAmount.peak, t01));
-  const l = lerp(ANIM.letterSpacing.rest, ANIM.letterSpacing.peak, t01);
+function renderAnimationFrame(t_loop){
+  // t_loop ∈ [0,1). All curves are exact-periodic in t_loop so frame 0 == frame N.
+  const TAU = Math.PI * 2;
+  // Radius: |sin(2π·t)|-style breath via (1 - cos(4π·t))/2. Zero at t=0, 0.5, 1.
+  // Two legible moments per cycle (t≈0 and t≈0.5) — crisp text emerges, smears
+  // back into a blob, re-forms, smears again.
+  const radiusShape = (1 - Math.cos(t_loop * 2 * TAU)) / 2;       // 0..1..0..1..0
+  const b = ANIM.blurFloor + radiusShape * (ANIM.blurMax - ANIM.blurFloor);
+
+  // letterSpacing: full cosine breath through -amp..+amp..-amp over the cycle,
+  // phase-shifted by a quarter so spacing crosses zero (most legible) right at
+  // the blur zeros. cos(0)=1 means rest spacing = +amp+bias; we want the
+  // legible moments to land at neutral spacing, so use sin(2π·t) which is 0
+  // at t=0, +1 at t=0.25, 0 at t=0.5, -1 at t=0.75, 0 at t=1.
+  const l = ANIM.spacingBias + ANIM.spacingAmp * Math.sin(t_loop * TAU);
+
+  // motionAngle: monotonic 0→2π. Wraps cleanly (cos/sin periodic).
+  const ang = t_loop * TAU;
+
+  params.blurAmount = b;
+  params.letterSpacing = l;
+  params.motionAngle = ang;
+
   if(gui){
     gui.rows.get('blurAmount')?._write(b);
     gui.rows.get('letterSpacing')?._write(l);
   }
-  params.blurAmount = b;
-  params.letterSpacing = l;
   rasterizeText();
-}
-
-function renderAnimationFrame(t_loop){
-  const t01 = (1 - Math.cos(t_loop * 2 * Math.PI)) / 2;
-  applyAnimationT(t01);
-  // applyAnimationT already re-rasterises (letterSpacing changes glyph layout).
   buildBlur();
   paint();
 }
