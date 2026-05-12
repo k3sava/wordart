@@ -125,29 +125,68 @@
     }
   }
 
-  function wire({canvas, name, pngBtn, mp4Btn, rec}){
+  // MediaRecorder fallback — used only if VideoEncoder isn't available
+  // (older Safari, iPad iOS < 17). Records the live canvas in real time for
+  // one cycle. Returns a Promise that resolves when the blob has saved.
+  function exportVideoRealtime(canvas, name){
+    return new Promise((resolve, reject) => {
+      const tries = ['video/mp4;codecs=avc1.42E01E', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+      const mime = tries.find(m => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(m));
+      if(!mime) return reject(new Error('No supported video format on this device.'));
+      const ext = mime.startsWith('video/mp4') ? 'mp4' : 'webm';
+      const stream = canvas.captureStream(FPS);
+      const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 8_000_000 });
+      const chunks = [];
+      rec.ondataavailable = (e) => { if(e.data && e.data.size > 0) chunks.push(e.data); };
+      rec.onstop = () => {
+        downloadBlob(new Blob(chunks, { type: mime }), `${name}-${Date.now()}.${ext}`);
+        resolve();
+      };
+      rec.onerror = (ev) => reject(ev.error || ev);
+      if(window.WAEffect?.beginRecording) window.WAEffect.beginRecording();
+      else if(window.WAEffect?.pauseRender){
+        window.WAEffect.pauseRender();
+        const start = performance.now();
+        const tick = () => {
+          const t = ((performance.now() - start) / 1000) % 1;
+          window.WAEffect.renderAt?.(t);
+          if(performance.now() - start < 15_000) requestAnimationFrame(tick);
+        };
+        tick();
+      }
+      rec.start(250);
+      setTimeout(() => { try { rec.stop(); } catch(_){} window.WAEffect?.resumeRender?.(); }, 15_000);
+    });
+  }
+
+  function wire({canvas, name, pngBtn, mp4Btn}){
     if(pngBtn) pngBtn.addEventListener('click', () => exportPNG(canvas, name));
     if(!mp4Btn) return;
+    const origLabel = mp4Btn.textContent;
     mp4Btn.addEventListener('click', async () => {
       if(mp4Btn.dataset.busy) return;
       mp4Btn.dataset.busy = '1';
-      const recEl = rec || document.querySelector('.wa-rec');
-      const bar = recEl?.querySelector('.bar');
-      const label = recEl?.querySelector('.label');
-      if(label) label.textContent = 'Rendering';
-      recEl?.classList.add('visible');
+      mp4Btn.textContent = 'rendering…';
+      mp4Btn.disabled = true;
       const cleanup = () => {
-        recEl?.classList.remove('visible');
-        if(bar) bar.style.width = '0%';
-        if(label) label.textContent = 'Recording';
+        mp4Btn.disabled = false;
+        mp4Btn.textContent = origLabel;
         delete mp4Btn.dataset.busy;
       };
       try {
-        await exportVideoOffline(canvas, name, {
-          onProgress:(p) => { if(bar) bar.style.width = (p * 100).toFixed(1) + '%'; },
-          onDone: cleanup,
-          onError:(e) => { console.error(e); alert('Export failed: ' + e); cleanup(); },
-        });
+        if(typeof VideoEncoder !== 'undefined'){
+          await exportVideoOffline(canvas, name, {
+            onDone: cleanup,
+            onError: async (e) => {
+              // Offline path failed — fall back to real-time MediaRecorder.
+              try { await exportVideoRealtime(canvas, name); } catch(e2){ alert('Export failed: ' + (e2.message || e2)); }
+              cleanup();
+            },
+          });
+        } else {
+          await exportVideoRealtime(canvas, name);
+          cleanup();
+        }
       } catch(e){
         console.error(e); alert('Export failed: ' + e.message); cleanup();
       }
