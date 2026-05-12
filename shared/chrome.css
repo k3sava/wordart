@@ -1,0 +1,185 @@
+/* wordart shared chrome — kami-aligned with opaque top + bottom bars. */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600&display=swap');
+@import url('theme-tokens.css');
+
+*,*::before,*::after{box-sizing:border-box;}
+
+:root{
+  --kami-breadcrumb:#bbb;
+  --kami-breadcrumb-hover:#1d1d1f;
+  --kami-footer:#bbb;
+  --kami-footer-link:#6b7280;
+  --kami-footer-link-hover:#1d1d1f;
+  --kami-font-display:'DM Sans', system-ui, sans-serif;
+  --kami-font-body:'DM Sans', system-ui, sans-serif;
+  --kami-font-mono:'JetBrains Mono', ui-monospace, monospace;
+  --bar-bg:rgba(246,246,244,.92);
+  --bar-border:rgba(0,0,0,.08);
+}
+html[data-theme="brutalist"]{
+  --kami-breadcrumb:#666; --kami-breadcrumb-hover:#d946ef;
+  --kami-footer:#666; --kami-footer-link:#000; --kami-footer-link-hover:#d946ef;
+  --kami-font-display:var(--kami-font-mono); --kami-font-body:var(--kami-font-mono);
+  --bar-bg:#fff; --bar-border:#000;
+}
+html[data-theme="editorial"]{
+  --kami-breadcrumb:#8a2f1b80; --kami-breadcrumb-hover:#8a2f1b;
+  --kami-footer:#8a2f1b80; --kami-footer-link:#8a2f1b; --kami-footer-link-hover:#2f2a26;
+  --kami-font-display:Georgia, 'EB Garamond', serif; --kami-font-body:var(--kami-font-display);
+  --bar-bg:rgba(243,238,226,.95); --bar-border:rgba(22,20,12,.18);
+}
+html[data-theme="terminal"]{
+  --kami-breadcrumb:rgba(255,209,102,.55); --kami-breadcrumb-hover:#ffd166;
+  --kami-footer:rgba(255,209,102,.55); --kami-footer-link:#ffd166; --kami-footer-link-hover:#ffe9a8;
+  --kami-font-display:var(--kami-font-mono); --kami-font-body:var(--kami-font-mono);
+  --bar-bg:rgba(13,17,23,.94); --bar-border:rgba(255,209,102,.25);
+}
+html[data-theme="zen"]{
+  --kami-breadcrumb:#7a847180; --kami-breadcrumb-hover:#334155;
+  --kami-footer:#7a847180; --kami-footer-link:#7a8471; --kami-footer-link-hover:#334155;
+  --bar-bg:rgba(236,234,216,.95); --bar-border:rgba(58,58,50,.12);
+}
+
+html,body{
+  margin:0; padding:0; height:100dvh;
+  background:#000; color:var(--text);
+  font-family:var(--kami-font-body);
+  font-size:14px;
+  -webkit-font-smoothing:antialiased;
+  overflow:hidden;
+}
+body.wa-effect{ background:#000; }
+
+/* Stage: full-viewport canvas, between the two bars. */
+.wa-stage{position:fixed !important;top:0 !important;right:0 !important;bottom:0 !important;left:0 !important;overflow:hidden;background:#000;z-index:0}
+.wa-stage canvas{display:block;width:100% !important;height:100% !important}
+
+/* ---------- TOP BAR ---------- */
+.wa-top{
+  position:fixed; top:0; left:0; right:0; height:44px;
+  display:flex; align-items:center; gap:14px;
+  padding:0 12px 0 8px;
+  background:var(--bar-bg);
+  border-bottom:1px solid var(--bar-border);
+  color:var(--text);
+  z-index:50;
+  -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px);
+}
+.wa-top .grow{ flex:1 }
+
+/* Kami breadcrumb (sits in top bar) */
+.kami-breadcrumb{
+  font-family:var(--kami-font-body); font-size:.78rem;
+  color:var(--kami-breadcrumb);
+  letter-spacing:.01em;
+  display:flex; align-items:center; gap:.35rem;
+}
+.kami-breadcrumb a{ color:inherit; text-decoration:none; opacity:.7 }
+.kami-breadcrumb a:hover{ color:var(--kami-breadcrumb-hover); opacity:1 }
+.kami-breadcrumb .sep{ opacity:.45; user-select:none }
+.kami-breadcrumb .current{ color:var(--text); opacity:1; font-weight:500 }
+
+/* Effect nav (top bar, right of breadcrumb) */
+.effect-nav{
+  display:flex; gap:6px;
+  font-family:var(--kami-font-body); font-size:12px;
+}
+.effect-nav a{
+  color:var(--text); opacity:.55;
+  text-decoration:none;
+  padding:4px 10px;
+  border:1px solid var(--bar-border);
+  border-radius:4px;
+  transition:opacity .15s, border-color .15s;
+}
+.effect-nav a:hover{ opacity:1 }
+.effect-nav a.active{ opacity:1; border-color:var(--text); }
+
+/* Export buttons */
+.wa-actions{ display:flex; gap:6px; align-items:center }
+.wa-actions button{
+  font-family:var(--kami-font-body); font-size:12px;
+  background:transparent; color:var(--text);
+  border:1px solid var(--bar-border); border-radius:4px;
+  padding:4px 12px; cursor:pointer;
+  transition:background .15s, color .15s, border-color .15s;
+  letter-spacing:.02em;
+}
+.wa-actions button:hover{ background:var(--text); color:var(--bg); border-color:var(--text) }
+.wa-actions button[disabled]{ opacity:.45; cursor:wait }
+
+/* ---------- THEME SWITCHER ---------- */
+.theme-switcher-container{
+  position:relative;
+  display:flex; flex-direction:column; align-items:flex-start; gap:6px;
+}
+.theme-switcher-pill{
+  display:flex; align-items:center; justify-content:center;
+  width:28px; height:28px; padding:0;
+  border:1px solid var(--bar-border);
+  border-radius:8px;
+  background:rgba(255,255,255,.85);
+  color:var(--text); font-size:13px; font-family:inherit;
+  cursor:pointer;
+  transition:all .15s;
+  box-shadow:0 1px 3px rgba(0,0,0,.06);
+}
+.theme-switcher-pill:hover{ box-shadow:0 2px 8px rgba(0,0,0,.1) }
+html[data-theme="brutalist"] .theme-switcher-pill{ background:#fff; border:2px solid #000; border-radius:0; color:#000; box-shadow:2px 2px 0 #000; font-weight:700 }
+html[data-theme="brutalist"] .theme-switcher-pill:hover{ background:#d946ef; box-shadow:3px 3px 0 #000; transform:translate(-1px,-1px) }
+html[data-theme="editorial"] .theme-switcher-pill{ background:transparent; border:1px solid rgba(47,42,38,.25); border-radius:2px; color:#8a2f1b; font-family:Georgia, serif; box-shadow:none }
+html[data-theme="editorial"] .theme-switcher-pill:hover{ background:#8a2f1b; color:#f8f3ea; border-color:#8a2f1b }
+html[data-theme="terminal"] .theme-switcher-pill{ background:#0d1117; border:1px dashed rgba(255,209,102,.5); border-radius:0; color:#ffd166; box-shadow:none }
+html[data-theme="terminal"] .theme-switcher-pill:hover{ background:#ffd166; color:#0d1117; border-style:solid }
+html[data-theme="zen"] .theme-switcher-pill{ background:transparent; border:1px solid hsla(92,8%,48%,.3); border-radius:999px; color:#7a8471; box-shadow:none }
+html[data-theme="zen"] .theme-switcher-pill:hover{ background:hsla(92,8%,48%,.1); color:#334155; border-color:#7a8471 }
+.theme-switcher-pill-icon{ font-size:13px; line-height:1 }
+
+.theme-switcher-picker{
+  position:absolute; top:34px; left:0;
+  display:none; flex-direction:column; gap:2px;
+  background:var(--bar-bg); border:1px solid var(--bar-border); border-radius:8px;
+  padding:6px; min-width:160px;
+  box-shadow:0 8px 24px rgba(0,0,0,.12);
+  -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px);
+  z-index:200;
+}
+.theme-switcher-container.open .theme-switcher-picker{ display:flex }
+.theme-switcher-option{
+  display:flex; align-items:center; gap:10px;
+  padding:6px 10px;
+  background:transparent; border:none; border-radius:6px;
+  color:var(--text); font-size:12px; font-family:var(--kami-font-body);
+  cursor:pointer; text-align:left;
+  transition:background .12s;
+}
+.theme-switcher-option:hover{ background:rgba(0,0,0,.05) }
+.theme-switcher-option.active{ background:rgba(0,0,0,.07); font-weight:600 }
+.theme-switcher-option-icon{ font-size:13px; width:18px; text-align:center }
+
+/* ---------- BOTTOM BAR ---------- */
+.wa-bottom{
+  position:fixed; left:0; right:0; bottom:0;
+  padding:8px 16px 10px;
+  display:flex; flex-direction:column; align-items:center; gap:4px;
+  background:var(--bar-bg);
+  border-top:1px solid var(--bar-border);
+  z-index:50;
+  font-family:var(--kami-font-mono); font-size:.7rem;
+  color:var(--kami-footer);
+  -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px);
+}
+.wa-bottom .row{ display:flex; gap:.5rem; flex-wrap:wrap; justify-content:center }
+.wa-bottom .row.made{ font-family:var(--kami-font-body); font-size:.75rem; opacity:.85 }
+.wa-bottom a{ color:var(--kami-footer-link); text-decoration:none; opacity:.85 }
+.wa-bottom a:hover{ color:var(--kami-footer-link-hover); opacity:1 }
+.wa-bottom .sep{ opacity:.4 }
+.wa-bottom .current{ color:var(--text); opacity:1; font-weight:600 }
+
+/* ---------- RECORDING OVERLAY ---------- */
+.wa-rec{ position:fixed; left:50%; bottom:36px; transform:translateX(-50%); z-index:80; background:rgba(0,0,0,.78); color:#fff; padding:8px 16px; border-radius:999px; font-family:var(--kami-font-mono); font-size:11px; display:none; align-items:center; gap:10px; }
+.wa-rec.visible{ display:flex }
+.wa-rec .dot{ width:8px; height:8px; border-radius:50%; background:#ff3b30; animation:wa-pulse 1s ease-in-out infinite }
+.wa-rec .track{ width:120px; height:4px; background:rgba(255,255,255,.15); border-radius:2px; overflow:hidden }
+.wa-rec .bar{ width:0%; height:100%; background:#fff; transition:width .25s linear }
+@keyframes wa-pulse{ 0%,100%{opacity:1} 50%{opacity:.35} }

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>wordart</title>
+<link rel="stylesheet" href="shared/chrome.css">
+<script src="shared/theme.js"></script>
+<style>
+  body{overflow:auto}
+  .wa-hub{padding:80px 24px 60px;max-width:780px;margin:0 auto;font-family:var(--wa-mono)}
+  .wa-hub h1{font-size:14px;margin:0 0 4px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+  .wa-hub p{color:var(--wa-muted);margin:0 0 32px}
+  .wa-tools{display:grid;gap:2px}
+  .wa-tools a{display:flex;justify-content:space-between;padding:10px 0;border-top:1px solid var(--wa-line);color:var(--wa-fg);text-decoration:none}
+  .wa-tools a:last-child{border-bottom:1px solid var(--wa-line)}
+  .wa-tools a:hover{color:var(--wa-muted)}
+  .wa-tools .desc{color:var(--wa-muted);font-size:11px}
+</style>
+</head>
+<body>
+<header class="wa-header">
+  <a class="wa-brand" href="./">wordart</a>
+  <nav class="wa-nav"><span>typography &amp; image effects</span></nav>
+</header>
+<main class="wa-hub">
+  <h1>wordart</h1>
+  <p>browser-based type and image effect tools. one canvas, one effect at a time, no accounts.</p>
+  <div class="wa-tools">
+    <a href="line/"><span>Line</span><span class="desc">parallel stripes through type</span></a>
+    <a href="slice/"><span>Slice</span><span class="desc">horizontal slice displacement</span></a>
+    <a href="blur/"><span>Blur</span><span class="desc">gaussian blur thresholded into fat type</span></a>
+    <a href="type/"><span>Type</span><span class="desc">letters drawn from a grid sampled inside type</span></a>
+    <a href="dither/"><span>Dither</span><span class="desc">pixelised type with random dropout</span></a>
+  </div>
+</main>
+<footer class="wa-footer">
+  <span>wordart</span>
+  <a href="https://toys.iamkesava.com">toys.iamkesava.com</a>
+</footer>
+</body>
+</html>

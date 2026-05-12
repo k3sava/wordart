@@ -1,0 +1,239 @@
+// Slice effect — text rasterised once, then redrawn as N horizontal bands,
+// each blitted with a horizontal offset so the slices fan out from centre.
+//
+// For slice i in [0, splits):
+//   xOff = floor(i * offset - totalOffset / 2) / textStretch
+//   yPos = floor(-textHeight/2 + i * splitHeight)
+//   source band = the same horizontal slice in the un-shifted text buffer
+//   blit source → destination, both relative to canvas centre,
+//   with a horizontal scale of textStretch applied around the centre.
+//
+// Animate ping-pongs the offset between -50 and +50 over a 2 s cycle, with
+// a multi-pass cubic-bezier ease so the slices linger at the extremes.
+'use strict';
+
+const SPEEDY_ANIMALS = ["Cheetah","Falcon","Sailfish","Marlin","Gazelle","Hare","Ostrich","Lion","Leopard"];
+const ELECTRIC_COLORS = ["#000000","#ADD8E6","#FF96FF","#ffcf37","#B5651D","#ff781e","#b6b6ed","#00FF00","#FF3333"];
+const ANIMATION_DURATION = 1000;
+
+function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
+
+const params = {
+  splits: 5 + Math.floor(Math.random() * 26),
+  offset: Math.random() < 0.5 ? -15 : 15,
+  showSplitLines: false,
+  textStretch: 1,
+  animate: false,
+  interactive: false,
+  text: 'hello',
+  textSize: 400,
+  bold: Math.random() < 0.5,
+  italic: Math.random() < 0.5,
+  bg: pick(ELECTRIC_COLORS),
+};
+if(window.WAState) window.WAState.hydrate(params);
+
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const textBuf = document.createElement('canvas');
+const tctx = textBuf.getContext('2d');
+
+let animationId = null;
+let animationStartTime = 0;
+let gui;
+let textMetricsCache = null;
+
+const dirty = { raster:false, paint:false };
+let rafQueued = false;
+function schedule(level){
+  if(level === 'raster') dirty.raster = true;
+  dirty.paint = true;
+  if(rafQueued) return;
+  rafQueued = true;
+  requestAnimationFrame(() => {
+    rafQueued = false;
+    if(dirty.raster) rasterizeText();
+    paint();
+    dirty.raster = dirty.paint = false;
+  });
+}
+
+function fitCanvas(){
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  const w = cv.clientWidth || window.innerWidth;
+  const h = cv.clientHeight || window.innerHeight;
+  const bw = Math.round(w * dpr);
+  const bh = Math.round(h * dpr);
+  if(cv.width !== bw) cv.width = bw;
+  if(cv.height !== bh) cv.height = bh;
+  if(textBuf.width !== bw) textBuf.width = bw;
+  if(textBuf.height !== bh) textBuf.height = bh;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  tctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  tctx.imageSmoothingEnabled = true;
+}
+
+function fontSpec(p){
+  const w = p.bold ? 'bold' : 'normal';
+  const s = p.italic ? 'italic' : 'normal';
+  return `${s} ${w} ${p.textSize}px Helvetica`;
+}
+
+function rasterizeText(){
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  const w = cv.clientWidth || window.innerWidth;
+  const h = cv.clientHeight || window.innerHeight;
+  // Clear in backing space.
+  tctx.save();
+  tctx.setTransform(1, 0, 0, 1, 0, 0);
+  tctx.clearRect(0, 0, textBuf.width, textBuf.height);
+  tctx.restore();
+  const weight = params.bold ? 'bold' : 'normal';
+  const style  = params.italic ? 'italic' : 'normal';
+  const size = params.textSize;
+  tctx.font = `${style} ${weight} ${size}px Helvetica`;
+  tctx.textAlign = 'center';
+  tctx.textBaseline = 'middle';
+  tctx.fillStyle = '#FFFFFF';
+  tctx.fillText(params.text, w / 2, h / 2);
+  const m = tctx.measureText(params.text);
+  textMetricsCache = {
+    width: m.width,
+    height: m.actualBoundingBoxAscent + m.actualBoundingBoxDescent,
+    dpr,
+    w, h,
+  };
+}
+
+// Multi-pass cubic bezier easing that holds at 0 and 1, snaps through middle.
+function bezier1d(p0, p1, p2, p3, t){
+  const u = 1 - t;
+  return u*u*u*p0 + 3*u*u*t*p1 + 3*u*t*t*p2 + t*t*t*p3;
+}
+function heavyEase(t){
+  let y = bezier1d(0, 0.02, 0.98, 1, t);
+  y = bezier1d(0, 0, 1, 1, y);
+  y = bezier1d(0, 0.01, 0.99, 1, y);
+  y = bezier1d(0, 0, 1, 1, y);
+  y = bezier1d(0, 0.01, 0.99, 1, y);
+  return y;
+}
+
+function paint(){
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  const w = cv.clientWidth || window.innerWidth;
+  const h = cv.clientHeight || window.innerHeight;
+  ctx.fillStyle = params.bg;
+  ctx.fillRect(0, 0, w, h);
+  if(!textMetricsCache) return;
+  const tw = textMetricsCache.width;
+  const th = textMetricsCache.height;
+  const splitH = Math.floor(th / params.splits);
+  if(splitH <= 0) return;
+  const totalOff = params.offset * (params.splits - 1);
+
+  ctx.save();
+  ctx.translate(w / 2, h / 2);
+  ctx.scale(params.textStretch, 1);
+
+  // Source band positions in BACKING pixels (drawImage source is unscaled).
+  const srcXBase = Math.floor((w / 2 - tw / 2) * dpr);
+  const srcYBase = Math.floor((h / 2 - th / 2) * dpr);
+  const sBandW = Math.floor(tw * dpr);
+  const sSplitH = Math.floor(splitH * dpr);
+
+  const last = params.splits - 1;
+  const dBandW = Math.floor(tw);
+  for(let i = 0; i < params.splits; i++){
+    const xOff = Math.floor(i * params.offset - totalOff / 2) / params.textStretch;
+    const yPos = Math.floor(-th / 2 + i * splitH);
+    const sx = srcXBase;
+    const sy = srcYBase + i * sSplitH;
+    const dx = Math.floor(-tw / 2 + xOff);
+    const dy = yPos;
+    ctx.drawImage(textBuf, sx, sy, sBandW, sSplitH, dx, dy, dBandW, splitH);
+    if(params.showSplitLines && i > 0){
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(-tw / 2, yPos);
+      ctx.lineTo(tw / 2, yPos);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+function redraw(){
+  rasterizeText();
+  paint();
+}
+
+function animationLoop(){
+  if(!params.animate) return;
+  const elapsed = (performance.now() - animationStartTime) % (ANIMATION_DURATION * 2);
+  let progress = elapsed / ANIMATION_DURATION;
+  if(progress >= 1) progress = 2 - progress;
+  const eased = heavyEase(progress);
+  params.offset = -50 + eased * 100;
+  gui.rows.get('offset')._write(params.offset);
+  if(dirty.raster){ rasterizeText(); dirty.raster = false; }
+  paint();
+  dirty.paint = false;
+  animationId = requestAnimationFrame(animationLoop);
+}
+
+function toggleAnimation(){
+  if(params.animate){
+    animationStartTime = performance.now();
+    animationLoop();
+  } else if(animationId){
+    cancelAnimationFrame(animationId);
+    animationId = null;
+  }
+}
+
+
+const RASTER_KEYS = new Set(['text','textSize','bold','italic']);
+
+function handleMouseMove(e){
+  if(!params.interactive || params.animate) return;
+  const r = cv.getBoundingClientRect();
+  const ax = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+  const ay = Math.max(0, Math.min(1, (e.clientY - r.top)  / r.height));
+  // Mouse X drives Offset (-50..+50). Mouse Y drives Text stretch (0.25..1.75).
+  params.offset      = Math.round((ax - 0.5) * 100);
+  params.textStretch = +(0.25 + ay * 1.5).toFixed(2);
+  if(gui){
+    gui.rows.get('offset')?._write(params.offset);
+    gui.rows.get('textStretch')?._write(params.textStretch);
+  }
+  schedule('paint');
+}
+
+function init(){
+  gui = new WAGui(document.getElementById('panel'), params);
+  gui.on((key) => {
+    if(key === 'animate'){ toggleAnimation(); return; }
+    if(window.WAState && window.WAState.isShared(key)) window.WAState.set(key, params[key]);
+    if(RASTER_KEYS.has(key)) dirty.raster = true;
+    if(params.animate) return; // animation loop picks up dirty.raster on next tick
+    if(RASTER_KEYS.has(key)) schedule('raster'); else schedule('paint');
+  });
+  cv.addEventListener('mousemove', handleMouseMove);
+  if(window.WAExport){
+    window.WAExport.wire({
+      canvas: cv,
+      name: 'wordart-slice',
+      pngBtn: document.getElementById('export-png'),
+      mp4Btn: document.getElementById('export-mp4'),
+      rec: document.querySelector('.wa-rec'),
+    });
+  }
+  window.addEventListener('resize', () => { fitCanvas(); schedule('raster'); });
+  fitCanvas();
+  redraw();
+}
+
+document.addEventListener('DOMContentLoaded', init);
