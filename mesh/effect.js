@@ -13,10 +13,19 @@
 
 const ELECTRIC_COLORS = ["#000000","#ADD8E6","#FF96FF","#ffcf37","#B5651D","#ff781e","#b6b6ed","#00FF00","#FF3333"];
 const CYCLE_MS = 15000;
+// Mesh ANIM — fabric being pushed and pulled.
+//   amplitude: 160 → 0 → 160  (cosine ease; t=0.5 is dead flat = legible)
+//   ampY:      0 → 110 → 0 → 110 → 0  (sin² of 2t; peaks at t=0.25 / t=0.75)
+//              orthogonal to amplitude so warp "circles" the legible moment
+//   phase:     0 → 720°  (two full rotations; seamless: 720 ≡ 0)
+//   frequency: 4 → 8 → 4  (slow breathe; seamless cosine)
+// Pixel-diff frame-0 vs frame-N is exact: every curve returns to its rest value.
 const ANIM = {
-  amplitude: { rest: 140, peak:  0 },
-  ampY:      { rest:  60, peak:  0 },
-  phase:     { rest:   0, peak: 360 },
+  amplitudePeak: 160, // at t=0 and t=1
+  ampYPeak:      110, // at t=0.25 and t=0.75
+  freqRest:        4,
+  freqPeak:        8,
+  phaseTurns:      2, // total rotations across one cycle
 };
 function lerp(a, b, t){ return a + (b - a) * t; }
 function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
@@ -162,25 +171,33 @@ function paint(){
 
 function redraw(){ rasterizeText(); paint(); }
 
-function applyAnimationT(t01){
-  const a  = lerp(ANIM.amplitude.rest, ANIM.amplitude.peak, t01);
-  const ay = lerp(ANIM.ampY.rest, ANIM.ampY.peak, t01);
-  // Phase is a one-way sweep over the cycle (not pingpong) so the wave drifts.
-  if(gui){
-    gui.rows.get('amplitude')?._write(a);
-    gui.rows.get('ampY')?._write(ay);
-  }
-  params.amplitude = a;
-  params.ampY = ay;
-}
-
 function renderAnimationFrame(t_loop){
-  const t01 = (1 - Math.cos(t_loop * 2 * Math.PI)) / 2;
-  applyAnimationT(t01);
-  // Phase rotates linearly so even at flat moments there's motion baked in
-  // when amp is nonzero.
-  params.phase = (t_loop * 360) % 360;
-  if(gui) gui.rows.get('phase')?._write(params.phase);
+  const TAU = Math.PI * 2;
+  // Horizontal amplitude: cos shape, 160 at endpoints, 0 at t=0.5.
+  // = peak * (1 + cos(2π t)) / 2  → seamless (cos is periodic).
+  const amp = ANIM.amplitudePeak * (1 + Math.cos(TAU * t_loop)) / 2;
+  // Vertical amplitude: sin² of 2t → 0 at t=0/0.5/1, peaks at t=0.25/0.75.
+  // Orthogonal to amp — when fabric stops pulling sideways it tugs vertically,
+  // then releases at the legible midpoint, then tugs vertically the other way.
+  const s = Math.sin(TAU * t_loop); // sin(2π t), period 1 — seamless
+  const ay = ANIM.ampYPeak * s * s;
+  // Frequency breathes 4 → 8 → 4 on a cosine; smooth, seamless.
+  const freq = (ANIM.freqRest + ANIM.freqPeak) / 2
+             - (ANIM.freqPeak - ANIM.freqRest) / 2 * Math.cos(TAU * t_loop);
+  // Phase: monotonic sweep, total turns × 360. Wraps cleanly at the end.
+  const phase = (t_loop * 360 * ANIM.phaseTurns) % 360;
+
+  params.amplitude = amp;
+  params.ampY      = ay;
+  params.frequency = freq;
+  params.phase     = phase;
+
+  if(gui){
+    gui.rows.get('amplitude')?._write(amp);
+    gui.rows.get('ampY')?._write(ay);
+    gui.rows.get('frequency')?._write(freq);
+    gui.rows.get('phase')?._write(phase);
+  }
   paint();
 }
 
