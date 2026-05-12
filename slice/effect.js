@@ -120,15 +120,15 @@ function rasterizeText(){
   };
 }
 
-// _axisAngle drives a continuous full rotation of the slice axis.
-let _axisAngle = 0;
 function applyAnimationT(t01, t_loop){
   const ang = (t_loop || 0) * Math.PI * 2;
-  // Offset oscillates +amp → 0 → -amp → 0 → +amp via cosine.
+  // Offset oscillates +amp → 0 → -amp → 0 → +amp via cosine. Text reads
+  // crisply at t=0.25 and t=0.75 (when offset crosses zero) and bands fan
+  // to both sides between. No axis rotation — the text needs to be upright
+  // when it reaches its legible moment.
   const o = ANIM.offsetAmp * Math.cos(ang);
   const s = lerp(ANIM.splits.rest, ANIM.splits.peak, t01);
   const stretch = lerp(ANIM.textStretch.rest, ANIM.textStretch.peak, t01);
-  _axisAngle = ang;
   if(gui){
     gui.rows.get('offset')?._write(o);
     gui.rows.get('splits')?._write(s);
@@ -154,9 +154,6 @@ function paint(){
 
   ctx.save();
   ctx.translate(w / 2, h / 2);
-  // Rotate the entire slice composition. The band blits below are computed
-  // in a rotated frame, so the bands appear to sweep through every angle.
-  if(_axisAngle) ctx.rotate(_axisAngle);
   ctx.scale(params.textStretch, 1);
 
   // Source band positions in BACKING pixels (drawImage source is unscaled).
