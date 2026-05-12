@@ -53,7 +53,7 @@ function seedFromT(t01){
 function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
 
 const params = {
-  pixelDistortion: 95 + Math.floor(Math.random() * 6), // 95..100 — clean landing frame; animation sweeps down to noisy rest
+  pixelDistortion: 28 + Math.floor(Math.random() * 6), // 28..33 — wordmark legible on landing; animation sweeps to 0 (rest) and 100 (peak) when ON
   pixelSize: 10,
   pixelSpacing: 0,
   cellRotation: 0,
