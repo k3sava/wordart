@@ -15,13 +15,17 @@
 const SPEEDY_ANIMALS = ["Cheetah","Falcon","Sailfish","Marlin","Gazelle","Hare","Ostrich","Lion","Leopard"];
 const ELECTRIC_COLORS = ["#000000","#ADD8E6","#FF96FF","#ffcf37","#B5651D","#ff781e","#b6b6ed","#00FF00","#FF3333"];
 const CYCLE_MS = 15000;
-// Intro/outro IS the slice effect: at rest the bands are fanned wide
-// (text scattered into horizontal stripes), at peak they converge at zero
-// (full text). The same shape on the way back.
+// Full oscillation through both signs over the cycle:
+//   t=0    : offset = +amplitude (bands fanned right)
+//   t=0.25 : offset = 0           (text crisp — first reveal)
+//   t=0.5  : offset = -amplitude (bands fanned LEFT)
+//   t=0.75 : offset = 0           (text crisp again — second reveal)
+//   t=1    : offset = +amplitude (loops cleanly)
+// Two reveals per cycle, bands sweep through both fan directions.
 const ANIM = {
-  offset:      { rest: 80,  peak: 0 },
-  splits:      { rest: 10,  peak: 10 },
-  textStretch: { rest: 1,   peak: 1 },
+  offsetAmp:   60,            // peak |offset| during oscillation
+  splits:      { rest: 10, peak: 10 },
+  textStretch: { rest: 1,  peak: 1 },
 };
 function lerp(a, b, t){ return a + (b - a) * t; }
 function pingpongT(elapsed){ return (1 - Math.cos((elapsed % CYCLE_MS) / CYCLE_MS * Math.PI * 2)) / 2; }
@@ -116,15 +120,15 @@ function rasterizeText(){
   };
 }
 
-// _axisAngle drives a continuous full rotation of the slice axis (the bands
-// tilt smoothly through 360° over one cycle). Mirrors line's monotonic angle
-// sweep so the motion feels alive instead of just breathing.
+// _axisAngle drives a continuous full rotation of the slice axis.
 let _axisAngle = 0;
 function applyAnimationT(t01, t_loop){
-  const o = lerp(ANIM.offset.rest, ANIM.offset.peak, t01);
+  const ang = (t_loop || 0) * Math.PI * 2;
+  // Offset oscillates +amp → 0 → -amp → 0 → +amp via cosine.
+  const o = ANIM.offsetAmp * Math.cos(ang);
   const s = lerp(ANIM.splits.rest, ANIM.splits.peak, t01);
   const stretch = lerp(ANIM.textStretch.rest, ANIM.textStretch.peak, t01);
-  _axisAngle = (t_loop || 0) * Math.PI * 2;
+  _axisAngle = ang;
   if(gui){
     gui.rows.get('offset')?._write(o);
     gui.rows.get('splits')?._write(s);
