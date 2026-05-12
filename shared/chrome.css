@@ -176,6 +176,53 @@ html[data-theme="zen"] .theme-switcher-pill:hover{ background:hsla(92,8%,48%,.1)
 .wa-bottom .sep{ opacity:.4 }
 .wa-bottom .current{ color:var(--text); opacity:1; font-weight:600 }
 
+/* ---------- SPLASH OVERLAY ---------- */
+.wa-splash{
+  position:fixed; inset:0;
+  display:none;
+  align-items:center; justify-content:center;
+  background:rgba(0,0,0,.86);
+  color:#fff;
+  font-family:var(--kami-font-body);
+  z-index:1000;
+  -webkit-backdrop-filter:blur(20px);
+  backdrop-filter:blur(20px);
+  cursor:pointer;
+}
+.wa-splash.visible{ display:flex }
+.wa-splash-inner{ max-width:580px; padding:40px; text-align:center }
+.wa-splash-title{ font-size:42px; font-weight:300; letter-spacing:.04em; margin-bottom:8px }
+.wa-splash-tag{ font-size:13px; opacity:.6; margin-bottom:36px; font-family:var(--kami-font-mono); letter-spacing:.02em }
+.wa-splash-grid{
+  display:grid; grid-template-columns:auto 1fr;
+  gap:10px 24px;
+  text-align:left;
+  margin-bottom:36px;
+  font-family:var(--kami-font-mono);
+  font-size:12px;
+  line-height:1.5;
+}
+.wa-splash-grid > span:nth-child(odd){ justify-self:end; opacity:.9 }
+.wa-splash-grid > span:nth-child(even){ opacity:.7 }
+.wa-splash-grid kbd{
+  display:inline-block;
+  padding:2px 6px;
+  margin:0 1px;
+  background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.18);
+  border-radius:3px;
+  font-family:var(--kami-font-mono);
+  font-size:11px;
+  min-width:18px; text-align:center;
+}
+.wa-splash-tap{
+  font-size:10px;
+  opacity:.45;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  font-family:var(--kami-font-mono);
+}
+
 /* ---------- RECORDING OVERLAY ---------- */
 .wa-rec{ position:fixed; left:50%; bottom:36px; transform:translateX(-50%); z-index:80; background:rgba(0,0,0,.78); color:#fff; padding:8px 16px; border-radius:999px; font-family:var(--kami-font-mono); font-size:11px; display:none; align-items:center; gap:10px; }
 .wa-rec.visible{ display:flex }
