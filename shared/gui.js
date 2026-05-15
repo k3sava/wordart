@@ -21,7 +21,17 @@
       panelEl.querySelectorAll('.wg-row').forEach(r => this._bindRow(r));
     }
     on(fn){ this.listeners.add(fn); return () => this.listeners.delete(fn); }
-    emit(key){ for(const fn of this.listeners) fn(key, this.params); }
+    emit(key){
+      // Forward shared-state keys (fit / bg / ratio / playRate / loopVideo)
+      // to PIXSource so every effect's panel is wired without per-effect
+      // boilerplate. The effect-level gui.on handler still fires for its own
+      // bookkeeping.
+      if(window.PIXSource && window.PIXSource.SHARED_KEYS &&
+         window.PIXSource.SHARED_KEYS.includes(key)){
+        window.PIXSource.setParam(key, this.params[key]);
+      }
+      for(const fn of this.listeners) fn(key, this.params);
+    }
     syncFromParams(){
       for(const [key, row] of this.rows){
         this._writeRow(row, this.params[key]);
@@ -48,8 +58,20 @@
         this.el.classList.toggle('collapsed', !!collapsed);
         document.body.classList.toggle('panel-collapsed', !!collapsed);
         handle.setAttribute('aria-label', collapsed ? 'Expand controls' : 'Collapse controls');
-        // Effects size to cv.clientWidth — kick a resize so they re-rasterize.
-        window.dispatchEvent(new Event('resize'));
+        // The .wa-stage right inset toggles via CSS the moment .panel-collapsed
+        // flips, so stage.clientWidth is already new. But the panel itself
+        // slides under a 220ms transition — schedule a second resize after
+        // the slide settles in case any effect's layout depends on the slot
+        // having fully cleared.
+        const kick = () => {
+          // Re-run applyRatio so the canvas style W/H pick up the new
+          // stage.clientWidth AND fire the resize event that effect.js'
+          // fitCanvas() listens to.
+          window.PIXSource?.applyRatio?.();
+          window.dispatchEvent(new Event('resize'));
+        };
+        kick();
+        setTimeout(kick, 260);
       };
       apply(localStorage.getItem(KEY) === '1');
       handle.addEventListener('click', () => {
@@ -66,6 +88,99 @@
       else if(row.classList.contains('wg-bool')) this._bindBool(row, key);
       else if(row.classList.contains('wg-text')) this._bindText(row, key);
       else if(row.classList.contains('wg-color')) this._bindColor(row, key);
+      else if(row.classList.contains('wg-select')) this._bindSelect(row, key);
+      else if(row.classList.contains('wg-file')) this._bindFile(row, key);
+    }
+    _bindSelect(row, key){
+      // Each wg-select row gets rendered as a row of radio "pills" so a
+      // choice is one click and an instant visible change — no dropdown,
+      // no select-and-confirm step. The original <select> stays in the DOM
+      // (display:none) as the source of truth for accessibility, form
+      // serialisation and existing tests; the pills mirror its value.
+      const select = row.querySelector('select');
+      if(!select) return;
+      const widget = row.querySelector('.wg-widget') || row;
+      let pillGroup = widget.querySelector('.wg-pills');
+      if(!pillGroup){
+        pillGroup = document.createElement('div');
+        pillGroup.className = 'wg-pills';
+        pillGroup.setAttribute('role', 'radiogroup');
+        pillGroup.setAttribute('aria-label', key);
+        for(const opt of select.options){
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'wg-pill';
+          b.dataset.value = opt.value;
+          b.setAttribute('role', 'radio');
+          b.setAttribute('aria-checked', 'false');
+          b.textContent = opt.textContent || opt.value;
+          pillGroup.appendChild(b);
+        }
+        widget.appendChild(pillGroup);
+        select.style.display = 'none';
+      }
+      const pills = [...pillGroup.querySelectorAll('.wg-pill')];
+      const write = (v) => {
+        this.params[key] = v;
+        select.value = String(v);
+        for(const p of pills){
+          const on = p.dataset.value === String(v);
+          p.classList.toggle('active', on);
+          p.setAttribute('aria-checked', on ? 'true' : 'false');
+        }
+        this.emit(key);
+      };
+      row._write = write;
+      // Hydrate from PIXSource for shared keys (ratio/fit/bg/etc) so pills
+      // reflect the persisted cross-effect choice; fall back to effect
+      // params; final fallback to the markup default.
+      let initial;
+      if(window.PIXSource && window.PIXSource.SHARED_KEYS &&
+         window.PIXSource.SHARED_KEYS.includes(key) && key in window.PIXSource.params){
+        initial = window.PIXSource.params[key];
+      } else if(key in this.params){
+        initial = this.params[key];
+      } else {
+        initial = select.value;
+      }
+      write(initial);
+      for(const p of pills){
+        p.addEventListener('click', () => write(p.dataset.value));
+      }
+    }
+    _bindFile(row, key){
+      // File input row (image/video). data-handler="pix-source" pipes through PIXSource.
+      // The native <input type=file> is display:none — its job is purely to host the
+      // file picker. The visible label and `+` button proxy clicks to it.
+      const input = row.querySelector('input[type=file]');
+      const label = row.querySelector('.wg-file-label');
+      const openBtn = row.querySelector('.wg-file-open');
+      const sampleBtn = row.querySelector('.wg-shuffle');
+      const write = (v) => { this.params[key] = v; this.emit(key); };
+      row._write = write;
+      const openPicker = () => input?.click();
+      label?.addEventListener('click', openPicker);
+      openBtn?.addEventListener('click', openPicker);
+      input?.addEventListener('change', () => {
+        const f = input.files && input.files[0];
+        if(!f) return;
+        if(label) label.textContent = f.name.length > 18 ? f.name.slice(0, 15) + '…' : f.name;
+        if(window.PIXSource && row.dataset.handler === 'pix-source'){
+          window.PIXSource.loadFile(f).catch(err => console.warn(err));
+        }
+        write(f.name);
+        // Native <input type=file> won't re-fire `change` if the same filename
+        // is picked twice. Reset the value so consecutive picks of the same
+        // file still trigger a reload (useful when re-cropping externally).
+        input.value = '';
+      });
+      sampleBtn?.addEventListener('click', () => {
+        if(window.PIXSource && row.dataset.handler === 'pix-source'){
+          window.PIXSource.cycleSample();
+          if(label) label.textContent = 'sample';
+          write('sample');
+        }
+      });
     }
     _bindSlider(row, key){
       const min = +row.dataset.min, max = +row.dataset.max, step = +row.dataset.step || 0;

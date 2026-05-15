@@ -55,7 +55,10 @@ body.wa-effect{ background:#000; }
    rasterizes into the visible region instead of disappearing under the panel.
    Effects read cv.clientWidth, so this shrinks the draw area cleanly. */
 .wa-stage{position:fixed !important;top:0 !important;right:0 !important;bottom:0 !important;left:0 !important;overflow:hidden;background:#000;z-index:0}
-.wa-stage canvas{display:block;width:100% !important;height:100% !important}
+/* Canvas is sized by shared/state.js applyRatio() to fit the selected ratio,
+   centered with letterboxing. Effects read cv.clientWidth/Height which now
+   honour the chosen ratio without any per-effect change. */
+.wa-stage canvas{display:block}
 @media (min-width:641px){
   body:not(.panel-collapsed) .wa-stage{ right:320px !important; }
 }
@@ -85,12 +88,20 @@ body.wa-effect{ background:#000; }
 .kami-breadcrumb .sep{ opacity:.45; user-select:none }
 .kami-breadcrumb .current{ color:var(--text); opacity:1; font-weight:500 }
 
-/* Effect nav (top bar, right of breadcrumb) */
+/* Effect nav — legacy flat strip (preserved for any unconverted pages). */
 .effect-nav{
   display:flex; gap:6px;
-  font-family:var(--kami-font-body); font-size:12px;
+  font-family:var(--kami-font-body); font-size:11px;
+  overflow-x:auto; overflow-y:hidden;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:none;
+  max-width:60vw;
+  flex-shrink:1;
+  min-width:0;
 }
+.effect-nav::-webkit-scrollbar{ display:none; }
 .effect-nav a{
+  flex:0 0 auto;
   color:var(--text); opacity:.55;
   text-decoration:none;
   padding:4px 10px;
@@ -100,6 +111,170 @@ body.wa-effect{ background:#000; }
 }
 .effect-nav a:hover{ opacity:1 }
 .effect-nav a.active{ opacity:1; border-color:var(--text); }
+
+/* Compact effect nav — current slug + chevron, opens overlay menu. */
+.effect-nav.compact{
+  display:flex; align-items:center; gap:6px;
+  font-family:var(--kami-font-body); font-size:12px;
+  overflow:visible; max-width:none;
+}
+.effect-nav.compact .effect-nav-home{
+  color:var(--text); opacity:.5; text-decoration:none;
+  font-family:var(--kami-font-mono); font-size:11px;
+  letter-spacing:.02em;
+  padding:4px 4px;
+  transition:opacity .15s;
+}
+.effect-nav.compact .effect-nav-home:hover{ opacity:1; }
+.effect-nav.compact .effect-nav-sep{
+  opacity:.35; user-select:none;
+  font-family:var(--kami-font-mono); font-size:11px;
+}
+.effect-nav.compact .effect-nav-arrow{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:26px; height:26px;
+  border:1px solid var(--bar-border);
+  border-radius:6px;
+  color:var(--text); opacity:.6;
+  text-decoration:none;
+  font-family:var(--kami-font-mono); font-size:14px;
+  transition:opacity .15s, border-color .15s, background .15s;
+}
+.effect-nav.compact .effect-nav-arrow:hover{ opacity:1; border-color:var(--text); }
+.effect-nav.compact .effect-nav-current{
+  display:inline-flex; align-items:center; gap:8px;
+  background:transparent;
+  border:1px solid var(--bar-border);
+  border-radius:6px;
+  padding:4px 10px;
+  font-family:var(--kami-font-body); font-size:12px;
+  color:var(--text);
+  cursor:pointer;
+  transition:border-color .15s, background .15s;
+}
+.effect-nav.compact .effect-nav-current:hover{
+  border-color:var(--text);
+}
+.effect-nav.compact .effect-nav-name{
+  font-weight:500; letter-spacing:.005em;
+}
+.effect-nav.compact .effect-nav-chev{
+  opacity:.55; font-size:14px; line-height:1;
+}
+@media (max-width:640px){
+  .effect-nav.compact{ flex:1 1 auto; min-width:0; justify-content:flex-end; }
+  .effect-nav.compact .effect-nav-home, .effect-nav.compact .effect-nav-sep{ display:none; }
+}
+
+/* ---------- Nav overlay (⌘K / / / chevron-click) ---------- */
+.pix-nav-overlay{
+  position:fixed; inset:0;
+  display:none;
+  z-index:900;
+  font-family:var(--kami-font-body);
+}
+.pix-nav-overlay.visible{ display:block; }
+.pix-nav-overlay-bg{
+  position:absolute; inset:0;
+  background:rgba(0,0,0,.42);
+  -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+}
+.pix-nav-overlay-panel{
+  position:absolute;
+  top:80px; left:50%; transform:translateX(-50%);
+  width:min(640px, calc(100vw - 32px));
+  max-height:min(72vh, 640px);
+  display:flex; flex-direction:column;
+  background:var(--panel-bg, var(--bar-bg));
+  border:1px solid var(--bar-border);
+  border-radius:12px;
+  box-shadow:0 24px 60px rgba(0,0,0,.32);
+  overflow:hidden;
+  color:var(--text);
+}
+.pix-nav-overlay-head{
+  display:flex; align-items:center; gap:10px;
+  padding:12px 14px;
+  border-bottom:1px solid var(--bar-border);
+}
+.pix-nav-overlay-icon{
+  font-family:var(--kami-font-mono); font-size:14px; opacity:.55;
+}
+.pix-nav-overlay-head input{
+  flex:1; height:30px;
+  background:transparent; border:0; outline:0;
+  font-family:var(--kami-font-body); font-size:15px;
+  color:var(--text);
+}
+.pix-nav-overlay-head input::placeholder{ opacity:.45; }
+.pix-nav-overlay-close{
+  background:transparent;
+  color:var(--text); opacity:.6;
+  border:1px solid var(--bar-border); border-radius:5px;
+  padding:3px 8px;
+  font-family:var(--kami-font-mono); font-size:10px;
+  letter-spacing:.05em; cursor:pointer;
+}
+.pix-nav-overlay-close:hover{ opacity:1; border-color:var(--text); }
+
+.pix-nav-overlay-body{
+  flex:1; overflow-y:auto;
+  padding:6px 14px 8px;
+}
+.pix-nav-group{
+  padding:8px 0 6px;
+  border-bottom:1px dashed var(--bar-border);
+}
+.pix-nav-group:last-child{ border-bottom:0; }
+.pix-nav-group-title{
+  font-family:var(--kami-font-mono); font-size:10px;
+  letter-spacing:.12em; text-transform:uppercase;
+  opacity:.5;
+  margin-bottom:6px;
+}
+.pix-nav-group-items{
+  display:flex; flex-wrap:wrap; gap:6px;
+}
+.pix-nav-item{
+  display:inline-block;
+  padding:5px 10px;
+  border:1px solid var(--bar-border);
+  border-radius:5px;
+  color:var(--text); opacity:.7;
+  text-decoration:none;
+  font-family:var(--kami-font-mono); font-size:12px;
+  letter-spacing:.01em;
+  transition:opacity .12s, border-color .12s, background .12s;
+}
+.pix-nav-item:hover, .pix-nav-item:focus{
+  opacity:1; outline:0;
+  border-color:var(--text);
+  background:rgba(0,0,0,.05);
+}
+.pix-nav-item.active{
+  opacity:1; background:var(--text); color:var(--bg); border-color:var(--text);
+}
+.pix-nav-overlay-foot{
+  display:flex; gap:18px;
+  padding:8px 14px;
+  border-top:1px solid var(--bar-border);
+  font-family:var(--kami-font-mono); font-size:10px;
+  opacity:.55;
+}
+.pix-nav-overlay-foot kbd{
+  display:inline-block;
+  padding:1px 5px; margin:0 2px;
+  border:1px solid var(--bar-border); border-radius:3px;
+  background:transparent;
+  font-family:var(--kami-font-mono); font-size:9.5px;
+}
+@media (max-width:640px){
+  .pix-nav-overlay-panel{
+    top:auto; bottom:0; left:0; transform:none;
+    width:100%; max-height:80vh;
+    border-radius:14px 14px 0 0;
+  }
+}
 
 /* Export buttons */
 .wa-actions{ display:flex; gap:6px; align-items:center }
@@ -113,6 +288,33 @@ body.wa-effect{ background:#000; }
 }
 .wa-actions button:hover{ background:var(--text); color:var(--bg); border-color:var(--text) }
 .wa-actions button[disabled]{ opacity:.45; cursor:wait }
+/* Icon buttons (png / mp4 export) — SVG inside; centre and remove inline-block gaps. */
+.wa-actions button svg{ display:block; }
+.wa-actions button#export-png,
+.wa-actions button#export-mp4{
+  padding:5px 10px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+}
+/* Recording state on the mp4 button — pulsing red dot prefix and a
+   subtle border tint so users know capture is in progress. */
+.wa-actions button.recording{
+  border-color:#ff3b30;
+  color:#ff3b30;
+  opacity:1; cursor:wait;
+  padding-left:18px;
+  position:relative;
+}
+.wa-actions button.recording::before{
+  content:""; position:absolute;
+  left:8px; top:50%;
+  width:6px; height:6px;
+  border-radius:50%;
+  background:#ff3b30;
+  transform:translateY(-50%);
+  animation:wa-pulse 1s ease-in-out infinite;
+}
 
 /* ---------- THEME SWITCHER ---------- */
 .theme-switcher-container{
@@ -189,30 +391,52 @@ html[data-theme="zen"] .theme-switcher-pill:hover{ background:hsla(92,8%,48%,.1)
    neutral on purpose — they remain readable across themes.
 */
 
-/* Custom checkbox base (override browser default so themes can shape it) */
+/* Toggle switch base (replaces the previous checkbox visual). The native
+   <input type=checkbox> stays — themes can still shape this via tokens. */
 .wg input[type="checkbox"]{
   appearance:none; -webkit-appearance:none;
-  width:14px; height:14px;
+  width:34px; height:18px;
   margin:0;
-  border:1px solid var(--panel-border);
-  border-radius:3px;
-  background:var(--input-bg);
+  border:1px solid var(--input-border);
+  border-radius:999px;
+  background:var(--slider-track);
   cursor:pointer;
   display:inline-block;
   position:relative;
   vertical-align:middle;
+  transition:background .18s ease, border-color .18s ease;
+}
+.wg input[type="checkbox"]::after{
+  content:""; position:absolute;
+  left:1px; top:1px;
+  width:14px; height:14px;
+  border-radius:50%;
+  background:var(--text);
+  transition:transform .18s ease, background .18s ease;
+  box-shadow:0 1px 2px rgba(0,0,0,.18);
 }
 .wg input[type="checkbox"]:checked{
   background:var(--accent);
   border-color:var(--accent);
 }
 .wg input[type="checkbox"]:checked::after{
-  content:""; position:absolute;
-  left:3px; top:0px;
-  width:5px; height:9px;
-  border:solid #fff;
-  border-width:0 2px 2px 0;
-  transform:rotate(45deg);
+  transform:translateX(16px);
+  background:var(--bg);
+}
+
+/* Both BRUTALIST and TERMINAL are zero-radius aesthetics by design. The
+   per-element overrides further down cover the chrome surfaces, but each
+   new control type or homepage card was leaking the default 4-12px radius
+   through. A scoped catch-all keeps the geometry honest without needing a
+   matching override for every new element class. !important is required
+   because individual rules set border-radius explicitly. */
+html[data-theme="brutalist"] *,
+html[data-theme="brutalist"] *::before,
+html[data-theme="brutalist"] *::after,
+html[data-theme="terminal"] *,
+html[data-theme="terminal"] *::before,
+html[data-theme="terminal"] *::after{
+  border-radius:0 !important;
 }
 
 /* --- BRUTALIST --- hard borders, 0 radius, magenta accent on hover --- */
@@ -240,14 +464,18 @@ html[data-theme="brutalist"] .wg-track{
 }
 html[data-theme="brutalist"] .wg-fill{ background:#000 }
 html[data-theme="brutalist"] .wg-track::after{ background:#d946ef; width:3px }
+/* Brutalist toggle: sharp 2px black border, magenta when on, black knob. */
 html[data-theme="brutalist"] .wg input[type="checkbox"]{
-  border:2px solid #000; border-radius:0; background:#fff;
+  border:2px solid #000; background:#fff;
+}
+html[data-theme="brutalist"] .wg input[type="checkbox"]::after{
+  background:#000; box-shadow:none;
 }
 html[data-theme="brutalist"] .wg input[type="checkbox"]:checked{
   background:#d946ef; border-color:#000;
 }
 html[data-theme="brutalist"] .wg input[type="checkbox"]:checked::after{
-  border-color:#000;
+  background:#000;
 }
 html[data-theme="brutalist"] .wg{ border:2px solid #000; border-radius:0; box-shadow:6px 6px 0 #000 }
 html[data-theme="brutalist"] .wg-collapse{ border:2px solid #000; border-radius:0; background:#fff; color:#000; box-shadow:2px 2px 0 #000 }
@@ -273,8 +501,10 @@ html[data-theme="editorial"] .effect-nav a.active{
 html[data-theme="editorial"] .wg-track{ background:rgba(22,20,12,.05); border:1px solid rgba(22,20,12,.18); border-radius:2px }
 html[data-theme="editorial"] .wg-fill{ background:rgba(22,20,12,.35) }
 html[data-theme="editorial"] .wg-track::after{ background:#d4a040 }
-html[data-theme="editorial"] .wg input[type="checkbox"]{ border:1px solid rgba(22,20,12,.25); border-radius:2px; background:transparent }
+html[data-theme="editorial"] .wg input[type="checkbox"]{ border:1px solid rgba(22,20,12,.25); background:rgba(22,20,12,.06); }
+html[data-theme="editorial"] .wg input[type="checkbox"]::after{ background:#16140c; }
 html[data-theme="editorial"] .wg input[type="checkbox"]:checked{ background:#d4a040; border-color:#d4a040 }
+html[data-theme="editorial"] .wg input[type="checkbox"]:checked::after{ background:#f8f3ea; }
 
 /* --- TERMINAL --- dashed borders, mono, phosphor amber, brackets --- */
 html[data-theme="terminal"] .wa-actions button,
@@ -303,9 +533,10 @@ html[data-theme="terminal"] .effect-nav a{ padding:4px 6px; }
 html[data-theme="terminal"] .wg-track{ background:rgba(255,209,102,.04); border:1px dashed rgba(255,209,102,.4); border-radius:0; height:18px }
 html[data-theme="terminal"] .wg-fill{ background:rgba(255,209,102,.35) }
 html[data-theme="terminal"] .wg-track::after{ background:#ffd166 }
-html[data-theme="terminal"] .wg input[type="checkbox"]{ border:1px dashed rgba(255,209,102,.5); border-radius:0; background:transparent }
-html[data-theme="terminal"] .wg input[type="checkbox"]:checked{ background:#ffd166; border-color:#ffd166; border-style:solid }
-html[data-theme="terminal"] .wg input[type="checkbox"]:checked::after{ border-color:#0d1117 }
+html[data-theme="terminal"] .wg input[type="checkbox"]{ border:1px dashed rgba(255,209,102,.5); background:rgba(38,255,157,.06); }
+html[data-theme="terminal"] .wg input[type="checkbox"]::after{ background:#9eff00; }
+html[data-theme="terminal"] .wg input[type="checkbox"]:checked{ background:#9eff00; border-color:#9eff00; border-style:solid }
+html[data-theme="terminal"] .wg input[type="checkbox"]:checked::after{ background:#020806; }
 html[data-theme="terminal"] .wg{ border:1px dashed rgba(255,209,102,.4); border-radius:0; background:#0d1117 }
 html[data-theme="terminal"] .wg-collapse{ background:#0d1117; border:1px dashed rgba(255,209,102,.5); border-radius:0; color:#ffd166 }
 
@@ -330,8 +561,10 @@ html[data-theme="zen"] .effect-nav a.active{
 html[data-theme="zen"] .wg-track{ background:rgba(58,58,50,.06); border:1px solid rgba(58,58,50,.12); border-radius:999px; height:14px }
 html[data-theme="zen"] .wg-fill{ background:rgba(58,58,50,.25); border-radius:999px }
 html[data-theme="zen"] .wg-track::after{ background:#1f1f1c; width:3px; border-radius:2px }
-html[data-theme="zen"] .wg input[type="checkbox"]{ border:1px solid rgba(58,58,50,.25); border-radius:999px; background:transparent }
+html[data-theme="zen"] .wg input[type="checkbox"]{ border:1px solid rgba(58,58,50,.25); background:rgba(58,58,50,.08); }
+html[data-theme="zen"] .wg input[type="checkbox"]::after{ background:#3a3a32; }
 html[data-theme="zen"] .wg input[type="checkbox"]:checked{ background:#3a3a32; border-color:#3a3a32 }
+html[data-theme="zen"] .wg input[type="checkbox"]:checked::after{ background:#ecead8; }
 html[data-theme="zen"] .wg{ border:1px solid rgba(58,58,50,.12); border-radius:14px }
 html[data-theme="zen"] .wg-collapse{ border:1px solid rgba(58,58,50,.25); border-radius:999px; background:transparent; color:#3a3a32 }
 

@@ -19,23 +19,21 @@
   <nav class="kami-breadcrumb">
     <a href="https://iamkesava.com">home</a><span class="sep">·</span>
     <a href="https://toys.iamkesava.com">toys</a><span class="sep">·</span>
-    <span class="current">wordart</span>
+    <a href="../" class="current">wordart</a>
   </nav>
   <div class="grow"></div>
-  <nav class="effect-nav">
-    <a href="../line/">line</a>
-    <a href="../slice/">slice</a>
-    <a href="../blur/">blur</a>
-    <a href="../dither/" class="active">dither</a>
-    <a href="../type/">type</a>
-    <a href="../halftone/">halftone</a>
-    <a href="../glitch/">glitch</a>
-    <a href="../mesh/">mesh</a>
+  <nav class="effect-nav compact" aria-label="Effect navigation">
+    <a class="effect-nav-arrow" href="../blur/" title="Previous effect (blur)" aria-label="Previous">‹</a>
+    <button type="button" class="effect-nav-current" id="effect-nav-open" aria-haspopup="dialog" aria-expanded="false" title="Browse all 8 effects">
+      <span class="effect-nav-name">dither</span>
+      <span class="effect-nav-chev">›</span>
+    </button>
+    <a class="effect-nav-arrow" href="../glitch/" title="Next effect (glitch)" aria-label="Next">›</a>
   </nav>
   <div class="wa-actions">
-    <button id="help-btn" title="Keyboard shortcuts">keys</button>
-    <button id="export-png" title="export png">png</button>
-    <button id="export-mp4" title="record loopable video">video</button>
+    <button id="help-btn" title="Keyboard shortcuts">?</button>
+    <button id="export-png" title="export png"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="3" width="11" height="8" rx="1"/><path d="M2.5 9.5 l3-2.5 2.5 2 2-1.5 3.5 2.5"/><circle cx="6" cy="6" r="1" fill="currentColor" stroke="none"/><path d="M8 12 v3 m0 0 l-1.5 -1.5 m1.5 1.5 l1.5 -1.5"/></svg></button>
+    <button id="export-mp4" title="record loopable video"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="9.5" height="8" rx="1"/><path d="M11.5 6.5 l3 -1.5 v6 l-3 -1.5 z" fill="currentColor"/></svg></button>
   </div>
 </header>
 
