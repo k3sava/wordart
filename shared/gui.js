@@ -74,11 +74,14 @@
         setTimeout(kick, 260);
       };
       apply(localStorage.getItem(KEY) === '1');
-      handle.addEventListener('click', () => {
+      const toggle = () => {
         const next = !this.el.classList.contains('collapsed');
         apply(next);
         localStorage.setItem(KEY, next ? '1' : '0');
-      });
+      };
+      handle.addEventListener('click', toggle);
+      const headerBtn = document.getElementById('toggle-controls');
+      if(headerBtn) headerBtn.addEventListener('click', toggle);
     }
     _bindRow(row){
       const key = row.dataset.key;
