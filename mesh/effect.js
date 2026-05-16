@@ -122,6 +122,7 @@ function rasterizeText(){
 const STRIP_PX = 2;
 
 function paint(){
+  window.WAGUI?.flashValues(params);
   const w = cssW(), h = cssH();
   const amp  = params.amplitude;
   const ampY = params.ampY;

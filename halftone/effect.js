@@ -154,6 +154,7 @@ function hexToRgb(hex){
 function luma(r,g,b){ return r*0.299 + g*0.587 + b*0.114; }
 
 function paint(){
+  window.WAGUI?.flashValues(params);
   const w = cssW(), h = cssH();
   ctx.fillStyle = params.bg;
   ctx.fillRect(0, 0, w, h);

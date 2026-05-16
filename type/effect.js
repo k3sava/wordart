@@ -124,6 +124,7 @@ function currentTransition(){
 }
 
 function paint(progress){
+  window.WAGUI?.flashValues(params);
   const w = cv.width, h = cv.height;
   ctx.save();
   ctx.setTransform(1,0,0,1,0,0);

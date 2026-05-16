@@ -143,6 +143,7 @@ function buildTinted(color){
 }
 
 function paint(){
+  window.WAGUI?.flashValues(params);
   const w = cssW(), h = cssH();
   ctx.save();
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);

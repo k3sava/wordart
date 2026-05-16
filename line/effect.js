@@ -183,6 +183,7 @@ function buildLines(){
 }
 
 function paint(){
+  window.WAGUI?.flashValues(params);
   const w = cssW(), h = cssH();
   ctx.fillStyle = params.bg;
   ctx.fillRect(0, 0, w, h);

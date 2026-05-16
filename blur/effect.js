@@ -175,6 +175,7 @@ function hexToRgb(hex){
 }
 
 function paint(){
+  window.WAGUI?.flashValues(params);
   const bw = blurBuf.width, bh = blurBuf.height;
   // Pull blurred pixels at full backing resolution, threshold them, paint
   // result onto cv at backing res too.

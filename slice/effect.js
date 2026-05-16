@@ -140,6 +140,7 @@ function applyAnimationT(t01, t_loop){
 }
 
 function paint(){
+  window.WAGUI?.flashValues(params);
   const dpr = Math.max(1, window.devicePixelRatio || 1);
   const w = cv.clientWidth || window.innerWidth;
   const h = cv.clientHeight || window.innerHeight;
