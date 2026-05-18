@@ -179,13 +179,18 @@ function paint(t_loop){
   const phase = (t_loop ?? 0) * 2 * Math.PI;
   const ps = params.particleSize;
 
+  // Batch all circles into a single path for GPU efficiency.
   ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
   for(const p of particles){
     const d = p.driftAmp * Math.sin(phase * p.freq);
     const px = p.homeX + d * Math.cos(p.driftAngle);
     const py = p.homeY + d * Math.sin(p.driftAngle);
-    ctx.fillRect(px - ps / 2, py - ps / 2, ps, ps);
+    const r  = ps / 2;
+    ctx.moveTo(px + r, py);
+    ctx.arc(px, py, r, 0, Math.PI * 2);
   }
+  ctx.fill();
 
   ctx.restore();
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);

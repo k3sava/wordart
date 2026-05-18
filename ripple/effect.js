@@ -1,44 +1,35 @@
-// Ripple effect — concentric sine-wave rings radially displace the text
-// pixels. For each output pixel its source position in the text buffer is
-// computed by a radial displacement:
-//   disp = amplitude × sin(2π × r / wavelength + phaseRad)
-// applied along the inward radius vector from the canvas centre. Inverse
-// warping (each dst pixel asks where it came from in src) avoids holes.
-// Damping mode fades the displacement with distance from centre, making
-// text look like a pebble-drop on water. Phase scrolls during animation
-// so ripples travel outward continuously.
-//
-// Performance: DPR is always capped at 1 (1× pixels) because the inner loop
-// is pure JS — no GPU path. The text raster is cached in cachedSrcData and
-// only invalidated when typography params change; phase/amplitude updates
-// are free (no re-raster). Radial fields (r, nx, ny per pixel) are built
-// once on resize and reused every frame.
-//
-// Seamless loop proof:
-//   At t=0: amp=0, phase=0 — no displacement, crisp text.
-//   At t=1: amp=0, phase=phaseTurns×360° ≡ 0° (mod 360°) — identical.
-//   Between: amplitude breathes via sin(πt) (0→peak→0); phase scrolls via
-//   phaseTurns full turns (integer, so sin closes exactly).
 'use strict';
+
+// Ripple — GPU-accelerated radial distortion via two-pass strip drawImage.
+// No getImageData / putImageData — zero JS pixel loops. Both passes use a
+// 1-CSS-px strip loop (~1080 + ~1920 drawImage calls vs 2M JS ops before):
+//
+//   Pass 1 (Y-warp → tmpBuf): each horizontal strip is displaced vertically
+//   by amplitude × sin(2π × |y−cy| / lambda + phase) × sign(y−cy).
+//
+//   Pass 2 (X-warp → cv): each vertical strip from tmpBuf is displaced
+//   horizontally by the same formula over |x−cx|.
+//
+// The two passes together approximate a true outward radial ripple: text
+// bulges away from the canvas centre in both axes simultaneously. The GPU
+// handles bilinear resampling per strip, giving sub-pixel smooth anti-aliased
+// output at full Retina resolution.
+//
+// Seamless loop: amplitude breathes 0→peak→0 via sin(πt); phase sweeps an
+// integer number of full turns so sin closes exactly at t=1.
 
 const ELECTRIC_COLORS = ["#000000","#ADD8E6","#FF96FF","#ffcf37","#B5651D","#ff781e","#b6b6ed","#00FF00","#FF3333"];
 const CYCLE_MS = 15000;
 const ANIM = {
-  amplitudePeak: 45,  // peak displacement in backing pixels
-  phaseTurns:     3,  // integer turns → seamless: sin is periodic
+  amplitudePeak: 40,
+  phaseTurns:    3,   // integer turns → sin(2π·n·0) = sin(2π·n·1) = 0, loop closes
 };
 
 function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
-function lerp(a, b, t){ return a + (b - a) * t; }
-function hexToRgb(hex){
-  const m = /^#?([a-f0-9]{2})([a-f0-9]{2})([a-f0-9]{2})$/i.exec(String(hex || '#000000'));
-  if(!m) return [0, 0, 0];
-  return [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)];
-}
 
 const params = {
-  amplitude:   15,
-  wavelength:  60,
+  amplitude:   18,
+  wavelength:  80,
   phase:        0,
   damp:        false,
   animate:     false,
@@ -52,27 +43,15 @@ const params = {
 if(window.WAState) window.WAState.hydrate(params);
 
 const cv      = document.getElementById('cv');
-// DPR is fixed at 1 for this effect — the JS pixel loop is the bottleneck.
-// Drawing at native CSS px means backing res === display res: no scaling needed.
 const ctx     = cv.getContext('2d');
 const textBuf = document.createElement('canvas');
-const tctx    = textBuf.getContext('2d', { willReadFrequently: true });
+const tctx    = textBuf.getContext('2d');
+const tmpBuf  = document.createElement('canvas');  // intermediate for two-pass
+const tmpCtx  = tmpBuf.getContext('2d');
 
+let DPR = 1;
 let gui;
-// DPR always 1 for ripple — declared as const after init to make intent clear.
-const DPR = 1;
-
-let animationId        = null;
-let animationStartTime = 0;
-
-// Precomputed radial fields — one Float32Array element per backing pixel.
-let rField    = null;  // distance from centre
-let nxField   = null;  // unit radius vector x component
-let nyField   = null;  // unit radius vector y component
-let maxRippleR = 1;    // max r in the field (used for damping normalisation)
-
-// Cached source pixel data — invalidated when typography params change.
-let cachedSrcData = null;
+let animationId = null, animationStartTime = 0;
 
 const dirty = { raster: false, paint: false };
 let rafQueued = false;
@@ -83,7 +62,7 @@ function schedule(level){
   rafQueued = true;
   requestAnimationFrame(() => {
     rafQueued = false;
-    if(dirty.raster){ rasterizeText(); cachedSrcData = null; }
+    if(dirty.raster) rasterizeText();
     paint();
     dirty.raster = dirty.paint = false;
   });
@@ -92,37 +71,17 @@ function schedule(level){
 function cssW(){ return cv.clientWidth  || window.innerWidth; }
 function cssH(){ return cv.clientHeight || window.innerHeight; }
 
-function buildRadialField(){
-  const bw = textBuf.width, bh = textBuf.height;
-  const cx = bw / 2, cy = bh / 2;
-  maxRippleR = Math.sqrt(cx * cx + cy * cy) || 1;
-  rField  = new Float32Array(bw * bh);
-  nxField = new Float32Array(bw * bh);
-  nyField = new Float32Array(bw * bh);
-  for(let y = 0; y < bh; y++){
-    for(let x = 0; x < bw; x++){
-      const dx = x - cx, dy = y - cy;
-      const r  = Math.sqrt(dx * dx + dy * dy);
-      const i  = y * bw + x;
-      rField[i]  = r;
-      nxField[i] = r > 0.5 ? dx / r : 0;
-      nyField[i] = r > 0.5 ? dy / r : 0;
-    }
-  }
-}
-
 function fitCanvas(){
-  // Always DPR=1: canvas backing pixels === CSS pixels.
+  DPR = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
   const w = cssW(), h = cssH();
-  let resized = false;
-  for(const c of [cv, textBuf]){
-    if(c.width  !== w){ c.width  = w; resized = true; }
-    if(c.height !== h){ c.height = h; resized = true; }
+  const bw = Math.round(w * DPR), bh = Math.round(h * DPR);
+  for(const c of [cv, textBuf, tmpBuf]){
+    if(c.width  !== bw) c.width  = bw;
+    if(c.height !== bh) c.height = bh;
   }
-  // Identity transform — DPR=1 so no scaling.
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  tctx.setTransform(1, 0, 0, 1, 0, 0);
-  if(resized){ buildRadialField(); cachedSrcData = null; }
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  tctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  tmpCtx.setTransform(DPR, 0, 0, DPR, 0, 0);
 }
 
 function fontSpec(size){
@@ -132,116 +91,101 @@ function fontSpec(size){
 }
 
 function rasterizeText(){
-  const w = textBuf.width, h = textBuf.height;
-  // DPR=1 so identity transform is already set.
-  tctx.clearRect(0, 0, w, h);
-
+  const w = cssW(), h = cssH();
+  tctx.save();
+  tctx.setTransform(1, 0, 0, 1, 0, 0);
+  tctx.clearRect(0, 0, textBuf.width, textBuf.height);
+  tctx.restore();
+  tctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   const FIT = 0.92;
   let size = params.textSize;
   tctx.font = fontSpec(size);
   const measured = tctx.measureText(params.text).width;
-  if(measured > 0 && measured > w * FIT){
+  if(measured > w * FIT && measured > 0){
     size = Math.max(12, Math.floor(size * (w * FIT) / measured));
+    tctx.font = fontSpec(size);
   }
-
-  tctx.font        = fontSpec(size);
-  tctx.textAlign   = 'center';
+  tctx.textAlign    = 'center';
   tctx.textBaseline = 'middle';
-  tctx.fillStyle   = '#FFFFFF';
+  tctx.fillStyle    = '#ffffff';
   tctx.fillText(params.text, w / 2, h / 2);
-
-  // Invalidate cache so paint() reads fresh pixels.
-  cachedSrcData = null;
 }
 
 function paint(overridePhase, overrideAmp){
   window.WAGUI?.flashValues(params);
-  const w = textBuf.width, h = textBuf.height;
-
-  // Obtain source pixels (cached until typography changes).
-  if(!cachedSrcData){
-    cachedSrcData = tctx.getImageData(0, 0, w, h).data;
-  }
-  const srcData = cachedSrcData;
-
-  const dst     = ctx.createImageData(w, h);
-  const dstData = dst.data;
-
-  const [br, bg, bb] = hexToRgb(params.bg);
-
-  // Fill destination with background colour.
-  for(let i = 0; i < dstData.length; i += 4){
-    dstData[i]     = br;
-    dstData[i + 1] = bg;
-    dstData[i + 2] = bb;
-    dstData[i + 3] = 255;
-  }
-
-  if(!rField){ ctx.putImageData(dst, 0, 0); return; }
-
-  const amp      = (overrideAmp   != null) ? overrideAmp   : params.amplitude;
+  const w = cssW(), h = cssH();
+  const cx = w / 2, cy = h / 2;
+  const amp      = overrideAmp   != null ? overrideAmp   : params.amplitude;
   const lambda   = Math.max(1, params.wavelength);
-  const phaseRad = ((overridePhase != null) ? overridePhase : params.phase) * Math.PI / 180;
+  const phaseRad = ((overridePhase != null ? overridePhase : params.phase)) * Math.PI / 180;
   const doDamp   = params.damp;
+  const maxR     = Math.sqrt(cx * cx + cy * cy) || 1;
+  const bw       = textBuf.width;
+  const bh       = textBuf.height;
+
+  // --- Pass 1: Y-warp into tmpBuf ---
+  // For each horizontal strip at CSS y, compute vertical displacement from
+  // the canvas centre and sample the corresponding row from textBuf.
+  // The browser bilinearly resamples the fractional source row.
+  tmpCtx.clearRect(0, 0, w, h);  // clear in CSS space (DPR transform is active)
 
   for(let y = 0; y < h; y++){
-    for(let x = 0; x < w; x++){
-      const idx = y * w + x;
-      const r   = rField[idx];
-      if(r < 0.5) continue;
-
-      const nx = nxField[idx];
-      const ny = nyField[idx];
-
-      // Damping: linearly reduce displacement toward zero at the field edge.
-      const damp = doDamp ? Math.max(0, 1 - r / maxRippleR) : 1;
-
-      // Signed displacement along the radius vector.
+    const dy = y - cy;
+    const r  = Math.abs(dy);
+    let srcY;
+    if(r < 0.5){
+      srcY = y;
+    } else {
+      const damp = doDamp ? Math.max(0, 1 - r / maxR) : 1;
       const disp = amp * Math.sin(2 * Math.PI * r / lambda + phaseRad) * damp;
-
-      // Inverse warp: for this dst pixel, find where it came from in src.
-      const sx = Math.round(x - disp * nx);
-      const sy = Math.round(y - disp * ny);
-
-      if(sx < 0 || sx >= w || sy < 0 || sy >= h) continue;
-
-      const srcIdx = (sy * w + sx) * 4;
-      // Source pixel is white text on transparent background.
-      // Alpha > 128 means this texel is part of the glyph.
-      if(srcData[srcIdx + 3] > 128){
-        const dstIdx = (y * w + x) * 4;
-        dstData[dstIdx]     = 255;
-        dstData[dstIdx + 1] = 255;
-        dstData[dstIdx + 2] = 255;
-        dstData[dstIdx + 3] = 255;
-      }
+      const ny   = dy / r;  // ±1 (sign of y offset from centre)
+      srcY = Math.max(0, Math.min(h - 1, y - disp * ny));
     }
+    // Copy 1 CSS-px-tall strip from textBuf at srcY into tmpBuf at y.
+    // Source coords are in backing pixels; dest coords are in CSS space.
+    tmpCtx.drawImage(textBuf, 0, srcY * DPR, bw, DPR, 0, y, w, 1);
   }
 
-  ctx.putImageData(dst, 0, 0);
+  // --- Pass 2: X-warp + bg composite into cv ---
+  // Fill with background first, then layer the X-warped tmpBuf strips on top.
+  ctx.save();
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.fillStyle = params.bg;
+  ctx.fillRect(0, 0, w, h);
+
+  for(let x = 0; x < w; x++){
+    const dx = x - cx;
+    const r  = Math.abs(dx);
+    let srcX;
+    if(r < 0.5){
+      srcX = x;
+    } else {
+      const damp = doDamp ? Math.max(0, 1 - r / maxR) : 1;
+      const disp = amp * Math.sin(2 * Math.PI * r / lambda + phaseRad) * damp;
+      const nx   = dx / r;  // ±1 (sign of x offset from centre)
+      srcX = Math.max(0, Math.min(w - 1, x - disp * nx));
+    }
+    // Copy 1 CSS-px-wide vertical strip from tmpBuf at srcX into cv at x.
+    ctx.drawImage(tmpBuf, srcX * DPR, 0, DPR, bh, x, 0, 1, h);
+  }
+
+  ctx.restore();
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
 }
 
 function redraw(){ rasterizeText(); paint(); }
 
 function renderAnimationFrame(t_loop){
-  // Phase scrolls by phaseTurns full rotations over the cycle.
-  // Integer turns → sin closes exactly at t=1 back to t=0 (seamless).
+  // Phase scrolls phaseTurns full rotations — integer turns close the loop.
   const phase = (t_loop * 360 * ANIM.phaseTurns) % 360;
-
-  // Amplitude: sin(πt) envelope — 0 at t=0 and t=1, peak at t=0.5.
-  // Text starts crisp, swells into maximum ripple, returns to crisp.
-  const amp = ANIM.amplitudePeak * Math.sin(t_loop * Math.PI);
-
+  // Amplitude breathes: 0 at t=0 and t=1 (crisp text), peak at t=0.5.
+  const amp   = ANIM.amplitudePeak * Math.sin(t_loop * Math.PI);
   params.phase     = phase;
   params.amplitude = amp;
-
   if(gui){
     gui.rows.get('phase')?._write(phase);
     gui.rows.get('amplitude')?._write(amp);
   }
-
-  // No re-rasterize needed: only phase and amp changed — source pixels
-  // are unchanged. cachedSrcData is still valid.
   paint(phase, amp);
 }
 
@@ -284,10 +228,8 @@ function handleMouseMove(e){
   const r  = cv.getBoundingClientRect();
   const ax = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
   const ay = Math.max(0, Math.min(1, (e.clientY - r.top)  / r.height));
-
   params.amplitude  = Math.round(ax * 60);
   params.wavelength = Math.max(10, Math.round(10 + ay * 190));
-
   if(gui){
     gui.rows.get('amplitude')?._write(params.amplitude);
     gui.rows.get('wavelength')?._write(params.wavelength);
@@ -295,8 +237,6 @@ function handleMouseMove(e){
   schedule('paint');
 }
 
-// Typography changes require fresh rasterization and field re-read.
-// amplitude / wavelength / phase / damp are paint-only (use cached src).
 const RASTER_KEYS = new Set(['text', 'textSize', 'bold', 'italic']);
 
 function init(){

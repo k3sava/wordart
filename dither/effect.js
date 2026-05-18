@@ -75,6 +75,7 @@ const textBuf = document.createElement('canvas');
 const tctx = textBuf.getContext('2d', { willReadFrequently: true });
 
 let gui;
+let DPR = 1;
 let rasterSize = params.textSize;
 let textPixels = null; // Uint8ClampedArray of textBuf
 let distortionMap = null; // Uint8Array of bools (one byte per cell)
@@ -103,13 +104,20 @@ function schedule(level){
   });
 }
 
+function cssW(){ return cv.clientWidth  || window.innerWidth; }
+function cssH(){ return cv.clientHeight || window.innerHeight; }
+
 function fitCanvas(){
-  const w = cv.clientWidth || window.innerWidth;
-  const h = cv.clientHeight || window.innerHeight;
+  DPR = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+  const w = cssW(), h = cssH();
+  const bw = Math.round(w * DPR), bh = Math.round(h * DPR);
   for(const c of [cv, textBuf]){
-    if(c.width  !== w) c.width  = w;
-    if(c.height !== h) c.height = h;
+    if(c.width  !== bw) c.width  = bw;
+    if(c.height !== bh) c.height = bh;
   }
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  tctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  textPixels = null;
 }
 
 function fontSpec(size){
@@ -124,9 +132,13 @@ function measureFit(text, size){
 }
 
 function rasterizeText(){
-  const w = textBuf.width, h = textBuf.height;
-  tctx.clearRect(0, 0, w, h);
-  // Shrink-to-fit at 92% canvas width — matches blur's discipline.
+  const w = cssW(), h = cssH();
+  tctx.save();
+  tctx.setTransform(1, 0, 0, 1, 0, 0);
+  tctx.clearRect(0, 0, textBuf.width, textBuf.height);
+  tctx.restore();
+  tctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  // Shrink-to-fit at 92% canvas width.
   const FIT = 0.92;
   let size = params.textSize;
   let measured = measureFit(params.text, size);
@@ -141,7 +153,7 @@ function rasterizeText(){
   tctx.fillStyle = '#FFFFFF';
   tctx.imageSmoothingEnabled = false;
   tctx.fillText(params.text, w / 2, h / 2);
-  textPixels = tctx.getImageData(0, 0, w, h).data;
+  textPixels = tctx.getImageData(0, 0, textBuf.width, textBuf.height).data;
 }
 
 // Random per-cell boolean mask. Cell (col,row) is kept iff random(0..100) <
@@ -149,7 +161,7 @@ function rasterizeText(){
 // over stride). Stored as a flat Uint8Array of 0/1.
 function buildDistortion(){
   const stride = params.pixelSize + params.pixelSpacing;
-  const w = textBuf.width, h = textBuf.height;
+  const w = cssW(), h = cssH();
   const rows = Math.ceil(h / stride);
   const cols = Math.ceil(w / stride);
   distortionStride = cols;
@@ -172,15 +184,17 @@ function hexToRgb(hex){
 
 function paint(){
   window.WAGUI?.flashValues(params);
-  const w = cv.width, h = cv.height;
+  const w = cssW(), h = cssH();
+  const bw = textBuf.width;
+
   ctx.save();
-  ctx.setTransform(1,0,0,1,0,0);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.imageSmoothingEnabled = false;
   ctx.fillStyle = params.bg;
   ctx.fillRect(0, 0, w, h);
   ctx.fillStyle = '#FFFFFF';
 
-  if(!textPixels) { ctx.restore(); return; }
+  if(!textPixels) { ctx.restore(); ctx.setTransform(DPR, 0, 0, DPR, 0, 0); return; }
   if(!distortionMap) buildDistortion();
 
   const ps = params.pixelSize;
@@ -189,9 +203,6 @@ function paint(){
   const rounded = params.rounded;
   const inv = params.invert;
   const interactive = params.interactive && !params.animate;
-  // Only rotate visible square cells with enough body to make rotation read.
-  // Below ~8px the diamond/square delta is sub-pixel noise and costs more
-  // than it shows.
   const rotDeg = (!rounded && ps >= 8) ? (params.cellRotation || 0) % 360 : 0;
   const rotRad = rotDeg * Math.PI / 180;
   const useRot = rotRad !== 0;
@@ -200,8 +211,10 @@ function paint(){
   let index = 0;
   for(let y = 0; y < h; y += stride){
     for(let x = 0; x < w; x += stride){
-      // Sample the raster at the top-left of the cell (matches reference).
-      const pi = (x + y * w) * 4;
+      // Sample the raster at the top-left of the cell in backing-pixel coords.
+      const bx = Math.min(Math.round(x * DPR), bw - 1);
+      const by = Math.min(Math.round(y * DPR), textBuf.height - 1);
+      const pi = (bx + by * bw) * 4;
       const isText = textPixels[pi] > 128;
       const draw = inv ? !isText : isText;
       if(draw && distortionMap[index]){
@@ -223,18 +236,15 @@ function paint(){
           ctx.ellipse(cx, cy, adj / 2, adj / 2, 0, 0, Math.PI * 2);
           ctx.fill();
         } else if(useRot){
-          // Rotated square = diamond at 45°. Draw as a 4-point path around
-          // the cell centre; cheaper than setTransform per cell.
           const cx = x + ps / 2;
           const cy = y + ps / 2;
           const r = adj / 2;
-          // Corners of the square in local space, rotated.
           const xr = cosR * r, yr = sinR * r;
           ctx.beginPath();
-          ctx.moveTo(cx - xr - (-sinR * r), cy - yr - cosR * r); // (-r,-r) rotated
-          ctx.lineTo(cx + xr - (-sinR * r), cy + yr - cosR * r); // ( r,-r)
-          ctx.lineTo(cx + xr + (-sinR * r), cy + yr + cosR * r); // ( r, r)
-          ctx.lineTo(cx - xr + (-sinR * r), cy - yr + cosR * r); // (-r, r)
+          ctx.moveTo(cx - xr - (-sinR * r), cy - yr - cosR * r);
+          ctx.lineTo(cx + xr - (-sinR * r), cy + yr - cosR * r);
+          ctx.lineTo(cx + xr + (-sinR * r), cy + yr + cosR * r);
+          ctx.lineTo(cx - xr + (-sinR * r), cy - yr + cosR * r);
           ctx.closePath();
           ctx.fill();
         } else {
@@ -247,6 +257,7 @@ function paint(){
     }
   }
   ctx.restore();
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
 }
 
 function remap(v, a, b, c, d){
