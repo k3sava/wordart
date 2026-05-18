@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Coil — wordart</title>
+<title>Collapse — wordart</title>
 <link rel="stylesheet" href="../shared/chrome.css">
 <link rel="stylesheet" href="../shared/gui.css">
 <script src="../shared/theme.js"></script>
@@ -23,12 +23,12 @@
   </nav>
   <div class="grow"></div>
   <nav class="effect-nav compact" aria-label="Effect navigation">
-    <a class="effect-nav-arrow" href="../chromatic/" title="Previous effect (chromatic)" aria-label="Previous">‹</a>
+    <a class="effect-nav-arrow" href="../coil/" title="Previous effect (coil)" aria-label="Previous">‹</a>
     <button type="button" class="effect-nav-current" id="effect-nav-open" aria-haspopup="dialog" aria-expanded="false" title="Browse all effects">
-      <span class="effect-nav-name">coil</span>
+      <span class="effect-nav-name">collapse</span>
       <span class="effect-nav-chev">›</span>
     </button>
-    <a class="effect-nav-arrow" href="../collapse/" title="Next effect (collapse)" aria-label="Next">›</a>
+    <a class="effect-nav-arrow" href="../constellation/" title="Next effect (constellation)" aria-label="Next">›</a>
   </nav>
   <div class="wa-actions">
     <button id="help-btn" title="Keyboard shortcuts">?</button>
@@ -45,20 +45,19 @@
 <aside class="wg" id="panel">
   <div class="wg-title" role="button" tabindex="0">Controls</div>
   <div class="wg-body">
-    <div class="wg-row wg-slider" data-key="turns"    data-min="0.5" data-max="8"   data-step="0.1"><div class="wg-name">Turns</div><div class="wg-widget"><div class="wg-track"><div class="wg-fill"></div></div><input type="number" inputmode="numeric"></div></div>
-    <div class="wg-row wg-slider" data-key="radius"   data-min="50"  data-max="300" data-step="1"><div class="wg-name">Radius</div><div class="wg-widget"><div class="wg-track"><div class="wg-fill"></div></div><input type="number" inputmode="numeric"></div></div>
-    <div class="wg-row wg-slider" data-key="spacing"  data-min="0.5" data-max="3"   data-step="0.05"><div class="wg-name">Spacing</div><div class="wg-widget"><div class="wg-track"><div class="wg-fill"></div></div><input type="number" inputmode="numeric"></div></div>
-    <div class="wg-row wg-slider" data-key="rotation" data-min="0"   data-max="360" data-step="1"><div class="wg-name">Angle</div><div class="wg-widget"><div class="wg-track"><div class="wg-fill"></div></div><input type="number" inputmode="numeric"></div></div>
+    <div class="wg-row wg-slider" data-key="gravity"     data-min="1"   data-max="20"  data-step="0.1"><div class="wg-name">Gravity</div><div class="wg-widget"><div class="wg-track"><div class="wg-fill"></div></div><input type="number" inputmode="numeric"></div></div>
+    <div class="wg-row wg-slider" data-key="stagger"     data-min="0"   data-max="1"   data-step="0.01"><div class="wg-name">Stagger</div><div class="wg-widget"><div class="wg-track"><div class="wg-fill"></div></div><input type="number" inputmode="numeric"></div></div>
+    <div class="wg-row wg-slider" data-key="bounce"      data-min="0"   data-max="1"   data-step="0.01"><div class="wg-name">Bounce</div><div class="wg-widget"><div class="wg-track"><div class="wg-fill"></div></div><input type="number" inputmode="numeric"></div></div>
     <div class="wg-row wg-bool"   data-key="animate"><div class="wg-name">Animate</div><label class="wg-widget"><input type="checkbox"></label></div>
     <div class="wg-row wg-bool"   data-key="interactive"><div class="wg-name">Interactive</div><label class="wg-widget"><input type="checkbox"></label></div>
     <div class="wg-row wg-text"   data-key="text"><div class="wg-name">Text</div><div class="wg-widget"><input type="text"></div></div>
-    <div class="wg-row wg-slider" data-key="textSize" data-min="12" data-max="120" data-step="1"><div class="wg-name">Text size</div><div class="wg-widget"><div class="wg-track"><div class="wg-fill"></div></div><input type="number" inputmode="numeric"></div></div>
+    <div class="wg-row wg-slider" data-key="textSize" data-min="100" data-max="600" data-step="1"><div class="wg-name">Text size</div><div class="wg-widget"><div class="wg-track"><div class="wg-fill"></div></div><input type="number" inputmode="numeric"></div></div>
     <div class="wg-row wg-bool"   data-key="bold"><div class="wg-name">Bold</div><label class="wg-widget"><input type="checkbox"></label></div>
     <div class="wg-row wg-bool"   data-key="italic"><div class="wg-name">Italic</div><label class="wg-widget"><input type="checkbox"></label></div>
     <div class="wg-row wg-color"  data-key="bg"><div class="wg-name">Background</div><div class="wg-widget"><div class="wg-swatch"><input type="color"></div><input type="text" spellcheck="false"></div></div>
     <div class="wg-row wg-bool"   data-key="invert"><div class="wg-name">Invert</div><label class="wg-widget"><input type="checkbox"></label></div>
   </div>
-  <p class="wg-credit">inspired by <a href="https://textcraft.net/spiral" target="_blank" rel="noopener">Spiral Text Generator</a></p>
+  <p class="wg-credit">inspired by <a href="https://codepen.io/search/pens?q=gravity+type" target="_blank" rel="noopener">gravity type and typographic collapse</a></p>
 </aside>
 
 <div class="wa-rec" role="status"><span class="dot"></span><span class="label">Recording</span><div class="track"><div class="bar"></div></div></div>
