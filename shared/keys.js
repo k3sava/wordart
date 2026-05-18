@@ -1,11 +1,11 @@
 // Global keyboard shortcuts + splash + nav overlay for wordart.
-// 19 effects total; keys 1-9 map to first 9 alphabetically. Overlay (⌘K / /) also
+// 21 effects total; keys 1-9 map to first 9 alphabetically. Overlay (⌘K / /) also
 // available for completeness so the chrome matches pixart byte-for-byte.
 (function(){
   'use strict';
   // Source of truth — mirrored in wordart/index.html.
   const EFFECTS = [
-    'aurora','blur','chromatic','coil','constellation','construct','cylinder','dither',
+    'aurora','blur','cascade','chromatic','coil','constellation','construct','cylinder','dither',
     'glitch','halftone','line','liquid','mesh',
     'noise','pixel','ribbon','ripple','slice','type','wave',
   ];
@@ -13,7 +13,7 @@
   const CATEGORIES = [
     ['3D',        ['cylinder','ribbon']],
     ['Stripe',    ['line','slice']],
-    ['Type',      ['aurora','mesh','type','wave']],
+    ['Type',      ['aurora','cascade','mesh','type','wave']],
     ['Halftone',  ['construct','dither','halftone','noise','pixel']],
     ['Cinematic', ['blur','chromatic','coil','constellation','glitch','liquid','ripple']],
   ];
