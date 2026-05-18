@@ -52,7 +52,7 @@
     ' ': () => clickRow('animate'),
     'p': () => document.getElementById('export-png')?.click(),
     'm': () => document.getElementById('export-mp4')?.click(),
-    'c': () => document.querySelector('.wg-collapse')?.click(),
+    'c': () => document.getElementById('toggle-controls')?.click(),
     'arrowright': () => cycle(+1),
     'arrowleft':  () => cycle(-1),
     '?': () => showSplash(),
