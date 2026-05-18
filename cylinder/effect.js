@@ -131,7 +131,7 @@ function paint(overrideRotation, overrideTilt, overrideRadius, boldOverride, ita
   const tiltDeg = overrideTilt     != null ? overrideTilt     : params.tilt;
   const R       = overrideRadius   != null ? overrideRadius   : params.radius;
 
-  const rotRad  = rotDeg  * Math.PI / 180;
+  const rotRad  = -rotDeg * Math.PI / 180;  // negative = first letter enters from right
   const tiltRad = tiltDeg * Math.PI / 180;
 
   const fgColor = params.invert ? params.bg : '#ffffff';

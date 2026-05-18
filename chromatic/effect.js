@@ -139,8 +139,9 @@ function renderChannel(bufCtx, r, g, b, offX, offY){
   bufCtx.setTransform(DPR, 0, 0, DPR, 0, 0);
 
   // Draw textBuf at offset — this is the alpha mask.
+  // Pass dest dimensions (cssW, cssH) so the DPR-scaled buffer renders at CSS size.
   bufCtx.globalCompositeOperation = 'source-over';
-  bufCtx.drawImage(textBuf, offX, offY);
+  bufCtx.drawImage(textBuf, offX, offY, w, h);
 
   // Fill the whole canvas with the channel color, clipped to text alpha via source-in.
   bufCtx.globalCompositeOperation = 'source-in';

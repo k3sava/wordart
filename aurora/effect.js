@@ -188,7 +188,7 @@ function drawBands(ctx2d, bw, bh, t_loop, speedMul, intensityMul, hueShiftDeg, w
 
 // ── Compositing paint ─────────────────────────────────────────────────────────
 
-function paint(t_loop, speedMul, intensityMul, hueShiftDeg, waveMul){
+function paint(t_loop = 0, speedMul, intensityMul, hueShiftDeg, waveMul){
   window.WAGUI?.flashValues(params);
 
   // Resolve multipliers — fall back to current param values when not animated.
@@ -298,7 +298,8 @@ function animationLoop(){
 
 function toggleAnimation(){
   if(params.animate){
-    animationStartTime = performance.now();
+    // Start 15% into the cycle — bands are already bright and moving.
+    animationStartTime = performance.now() - CYCLE_MS * 0.15;
     animationLoop();
   } else if(animationId){
     cancelAnimationFrame(animationId);
@@ -375,7 +376,11 @@ function init(){
     },
   });
 
-  window.addEventListener('resize', () => { fitCanvas(); schedule('raster'); });
+  window.addEventListener('resize', () => {
+    fitCanvas();
+    rasterizeText();
+    if(!params.animate) paint(0);
+  });
   fitCanvas();
   redraw();
 }
