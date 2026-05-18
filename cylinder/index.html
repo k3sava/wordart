@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cylinder — wordart</title>
+<link rel="stylesheet" href="../shared/chrome.css">
+<link rel="stylesheet" href="../shared/gui.css">
+<script src="../shared/theme.js"></script>
+</head>
+<body class="wa-effect">
+
+<header class="wa-top">
+  <div class="theme-switcher-container">
+    <button class="theme-switcher-pill" aria-label="Cycle theme" title="Cycle theme">
+      <span class="theme-switcher-pill-icon">●</span>
+    </button>
+  </div>
+  <nav class="kami-breadcrumb">
+    <a href="https://iamkesava.com">home</a><span class="sep">·</span>
+    <a href="https://toys.iamkesava.com">toys</a><span class="sep">·</span>
+    <a href="../" class="current">wordart</a>
+  </nav>
+  <div class="grow"></div>
+  <nav class="effect-nav compact" aria-label="Effect navigation">
+    <a class="effect-nav-arrow" href="../constellation/" title="Previous effect (constellation)" aria-label="Previous">‹</a>
+    <button type="button" class="effect-nav-current" id="effect-nav-open" aria-haspopup="dialog" aria-expanded="false" title="Browse all 17 effects">
+      <span class="effect-nav-name">cylinder</span>
+      <span class="effect-nav-chev">›</span>
+    </button>
+    <a class="effect-nav-arrow" href="../dither/" title="Next effect (dither)" aria-label="Next">›</a>
+  </nav>
+  <div class="wa-actions">
+    <button id="help-btn" title="Keyboard shortcuts">?</button>
+    <button id="toggle-controls" title="Toggle controls (C)"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><line x1="2" y1="4" x2="14" y2="4"/><line x1="2" y1="8" x2="14" y2="8"/><line x1="2" y1="12" x2="14" y2="12"/><circle cx="10" cy="4" r="1.6" fill="var(--bg,#fff)"/><circle cx="5" cy="8" r="1.6" fill="var(--bg,#fff)"/><circle cx="11" cy="12" r="1.6" fill="var(--bg,#fff)"/></svg></button>
+    <button id="export-png" title="export png"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="3" width="11" height="8" rx="1"/><path d="M2.5 9.5 l3-2.5 2.5 2 2-1.5 3.5 2.5"/><circle cx="6" cy="6" r="1" fill="currentColor" stroke="none"/><path d="M8 12 v3 m0 0 l-1.5 -1.5 m1.5 1.5 l1.5 -1.5"/></svg></button>
+    <button id="export-mp4" title="record loopable video"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="9.5" height="8" rx="1"/><path d="M11.5 6.5 l3 -1.5 v6 l-3 -1.5 z" fill="currentColor"/></svg></button>
+  </div>
+</header>
+
+<main class="wa-stage">
+  <canvas id="cv"></canvas>
+</main>
+
+<aside class="wg" id="panel">
+  <div class="wg-title" role="button" tabindex="0">Controls</div>
+  <div class="wg-body">
+    <div class="wg-row wg-slider" data-key="radius"   data-min="20"  data-max="400" data-step="1"><div class="wg-name">Radius</div><div class="wg-widget"><div class="wg-track"><div class="wg-fill"></div></div><input type="number" inputmode="numeric"></div></div>
+    <div class="wg-row wg-slider" data-key="rotation" data-min="0"   data-max="360" data-step="1"><div class="wg-name">Rotation</div><div class="wg-widget"><div class="wg-track"><div class="wg-fill"></div></div><input type="number" inputmode="numeric"></div></div>
+    <div class="wg-row wg-slider" data-key="tilt"     data-min="0"   data-max="90"  data-step="1"><div class="wg-name">Tilt</div><div class="wg-widget"><div class="wg-track"><div class="wg-fill"></div></div><input type="number" inputmode="numeric"></div></div>
+    <div class="wg-row wg-bool"   data-key="animate"><div class="wg-name">Animate</div><label class="wg-widget"><input type="checkbox"></label></div>
+    <div class="wg-row wg-bool"   data-key="interactive"><div class="wg-name">Interactive</div><label class="wg-widget"><input type="checkbox"></label></div>
+    <div class="wg-row wg-text"   data-key="text"><div class="wg-name">Text</div><div class="wg-widget"><input type="text"></div></div>
+    <div class="wg-row wg-slider" data-key="textSize" data-min="100" data-max="600" data-step="1"><div class="wg-name">Text size</div><div class="wg-widget"><div class="wg-track"><div class="wg-fill"></div></div><input type="number" inputmode="numeric"></div></div>
+    <div class="wg-row wg-bool"   data-key="bold"><div class="wg-name">Bold</div><label class="wg-widget"><input type="checkbox"></label></div>
+    <div class="wg-row wg-bool"   data-key="italic"><div class="wg-name">Italic</div><label class="wg-widget"><input type="checkbox"></label></div>
+    <div class="wg-row wg-color"  data-key="bg"><div class="wg-name">Background</div><div class="wg-widget"><div class="wg-swatch"><input type="color"></div><input type="text" spellcheck="false"></div></div>
+    <div class="wg-row wg-bool"   data-key="invert"><div class="wg-name">Invert</div><label class="wg-widget"><input type="checkbox"></label></div>
+  </div>
+  <p class="wg-credit">inspired by <a href="https://spacetypegenerator.com/" target="_blank" rel="noopener">Space Type Generator</a> by Kiel Mutschelknaus</p>
+</aside>
+
+<div class="wa-rec" role="status"><span class="dot"></span><span class="label">Recording</span><div class="track"><div class="bar"></div></div></div>
+
+<footer class="wa-bottom">
+  <nav class="row sister" aria-label="Sister sites">
+    <span><a href="https://apps.iamkesava.com/">apps</a></span><span class="sep">·</span>
+    <span><a href="https://tools.iamkesava.com/">tools</a></span><span class="sep">·</span>
+    <span class="current">toys</span><span class="sep">·</span>
+    <span><a href="https://codex.iamkesava.com/">codex</a></span>
+  </nav>
+  <div class="row made">
+    made by <a href="https://iamkesava.com" rel="author">kesava</a> <span class="sep">·</span> <a href="https://github.com/k3sava/wordart" rel="noopener">github</a>
+  </div>
+</footer>
+
+<script src="../shared/state.js" defer></script>
+<script src="../shared/keys.js" defer></script>
+<script src="../shared/gui.js" defer></script>
+<script src="../shared/export.js" defer></script>
+<script src="../shared/interact.js" defer></script>
+<script src="effect.js" defer></script>
+</body>
+</html>
