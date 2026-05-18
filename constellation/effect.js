@@ -27,7 +27,7 @@ const params = {
   gravity: 80,
   animate: false,
   interactive: false,
-  text: (window.WAState?.randomPhrase?.('cosmic')) ?? 'stars',
+  text: 'fun',
   textSize: 380,
   bold: false,
   italic: false,

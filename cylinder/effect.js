@@ -33,7 +33,7 @@ const params = {
   radius: 180,
   animate: false,
   interactive: false,
-  text: (window.WAState && window.WAState.randomPhrase) ? window.WAState.randomPhrase('playful') : 'cylinder',
+  text: 'the creator.',
   textSize: 360,
   bold: Math.random() < 0.5,
   italic: false,

@@ -26,7 +26,7 @@ const params = {
   bounce:      0.6,
   animate:     false,
   interactive: false,
-  text: (window.WAState && window.WAState.randomPhrase) ? window.WAState.randomPhrase('playful') : 'collapse',
+  text: 'a lot of',
   textSize:    300,
   bold:        Math.random() < 0.5,
   italic:      false,

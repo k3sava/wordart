@@ -36,7 +36,7 @@ const params = {
   seed: Math.floor(Math.random() * 1000),
   animate: false,
   interactive: false,
-  text: (window.WAState && window.WAState.randomPhrase) ? window.WAState.randomPhrase('playful') : 'clutter',
+  text: 'out there?',
   textSize: 320,
   bold: Math.random() < 0.5,
   italic: false,

@@ -25,7 +25,7 @@ const params = {
   tileCount: 4,
   animate: false,
   interactive: false,
-  text: (window.WAState && window.WAState.randomPhrase) ? window.WAState.randomPhrase('playful') : 'cascade',
+  text: 'is there',
   textSize: 160,
   bold: Math.random() < 0.5,
   italic: false,

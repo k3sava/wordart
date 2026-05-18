@@ -37,7 +37,7 @@ const params = {
   speed:       1.0,
   animate:     false,
   interactive: false,
-  text: (window.WAState && window.WAState.randomPhrase) ? window.WAState.randomPhrase('energetic') : 'prism',
+  text: 'anybody',
   textSize:    400,
   bold:        true,
   italic:      false,

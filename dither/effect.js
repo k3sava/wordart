@@ -70,7 +70,7 @@ const params = {
   invert: false, // landing frame stays legible; user can flip via UI
   animate: false,
   interactive: false,
-  text: (window.WAState && window.WAState.randomPhrase) ? window.WAState.randomPhrase('playful') : 'hello',
+  text: 'can you',
   textSize: 400,
   bold: false,
   italic: false,

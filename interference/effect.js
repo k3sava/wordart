@@ -32,7 +32,7 @@ const params = {
   threshold: 0.5,
   animate: false,
   interactive: false,
-  text: (window.WAState && window.WAState.randomPhrase) ? window.WAState.randomPhrase('playful') : 'interference',
+  text: "it's not!",
   textSize: 400,
   bold: true,
   italic: false,

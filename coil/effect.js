@@ -24,7 +24,7 @@ const params = {
   rotation: 0,
   animate:  false,
   interactive: false,
-  text: (window.WAState && window.WAState.randomPhrase) ? window.WAState.randomPhrase('playful') : 'coil',
+  text: 'this is',
   textSize: 48,
   bold: false,
   italic: false,

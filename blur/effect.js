@@ -44,7 +44,7 @@ const params = {
   animate: false,
   interactive: false,
   motionAngle: 0,       // radians; only visible when params.motion is true
-  text: (window.WAState && window.WAState.randomPhrase) ? window.WAState.randomPhrase('dreamy') : 'hello',
+  text: 'hello',
   textSize: 400,
   bold: true,
   italic: Math.random() < 0.5,

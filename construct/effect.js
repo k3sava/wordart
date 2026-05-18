@@ -28,7 +28,7 @@ const params = {
   jitter: 0,
   animate: false,
   interactive: false,
-  text: (window.WAState && window.WAState.randomPhrase) ? window.WAState.randomPhrase('playful') : 'construct',
+  text: 'says',
   textSize: 400,
   bold: true,
   italic: false,

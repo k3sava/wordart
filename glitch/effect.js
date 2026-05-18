@@ -43,7 +43,7 @@ const params = {
   scanlines: 25,
   animate: false,
   interactive: false,
-  text: (window.WAState && window.WAState.randomPhrase) ? window.WAState.randomPhrase('heavy') : 'hello',
+  text: 'please',
   textSize: 400,
   bold: true,
   italic: false,

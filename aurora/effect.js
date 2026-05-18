@@ -37,7 +37,7 @@ const params = {
   wave:        1.0,
   animate:     false,
   interactive: false,
-  text:        (window.WAState?.randomPhrase?.('cosmic')) ?? 'aurora',
+  text:        'hello',
   textSize:    400,
   bold:        false,
   italic:      true,
