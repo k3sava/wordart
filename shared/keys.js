@@ -5,7 +5,7 @@
   'use strict';
   // Source of truth — mirrored in wordart/index.html.
   const EFFECTS = [
-    'aurora','blur','chromatic','coil','constellation','cylinder','dither',
+    'aurora','blur','chromatic','coil','constellation','construct','cylinder','dither',
     'glitch','halftone','line','liquid','mesh',
     'noise','pixel','ribbon','ripple','slice','type','wave',
   ];
@@ -14,7 +14,7 @@
     ['3D',        ['cylinder','ribbon']],
     ['Stripe',    ['line','slice']],
     ['Type',      ['aurora','mesh','type','wave']],
-    ['Halftone',  ['dither','halftone','noise','pixel']],
+    ['Halftone',  ['construct','dither','halftone','noise','pixel']],
     ['Cinematic', ['blur','chromatic','coil','constellation','glitch','liquid','ripple']],
   ];
   window.WORDART_EFFECTS = EFFECTS;
