@@ -1,19 +1,20 @@
 // Global keyboard shortcuts + splash + nav overlay for wordart.
-// 8 effects total; keys 1-8 map to them alphabetically. Overlay (⌘K / /) also
+// 16 effects total; keys 1-9 map to first 9 alphabetically. Overlay (⌘K / /) also
 // available for completeness so the chrome matches pixart byte-for-byte.
 (function(){
   'use strict';
   // Source of truth — mirrored in wordart/index.html.
   const EFFECTS = [
-    'blur','dither','glitch','halftone',
-    'line','mesh','slice','type',
+    'blur','dither','echo','glitch','halftone',
+    'line','mesh','neon','noise','outline',
+    'pixel','ripple','shadow','slice','type','wave',
   ];
   // Categories: same partition as the homepage chips.
   const CATEGORIES = [
-    ['Stripe',     ['line','slice']],
-    ['Type',       ['type','mesh']],
-    ['Halftone',   ['dither','halftone']],
-    ['Cinematic',  ['blur','glitch']],
+    ['Stripe',    ['line','slice']],
+    ['Type',      ['mesh','outline','type','wave']],
+    ['Halftone',  ['dither','halftone','noise','pixel']],
+    ['Cinematic', ['blur','echo','glitch','neon','ripple','shadow']],
   ];
   window.WORDART_EFFECTS = EFFECTS;
   window.WORDART_CATEGORIES = CATEGORIES;

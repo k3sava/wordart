@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>wordart — 8 typography effects</title>
-<meta name="description" content="A small lab of 8 client-side typography effects: stripes, slices, halftone, mesh warp, glitch, blur silhouettes. Type a phrase, pick an effect, play.">
+<title>wordart — 16 typography effects</title>
+<meta name="description" content="A small lab of 16 client-side typography effects: stripes, slices, halftone, mesh warp, glitch, blur silhouettes, neon glow, pixel art, and more. Type a phrase, pick an effect, play.">
 <link rel="canonical" href="https://toys.iamkesava.com/wordart/">
 <link rel="stylesheet" href="shared/chrome.css">
 <link rel="stylesheet" href="shared/theme-tokens.css">
@@ -250,8 +250,8 @@
 <main class="home-wrap">
   <div class="home-lede">
     <h1 class="home-title">wordart</h1>
-    <p class="home-sub">8 client-side typography effects. type a phrase, pick a treatment, play.</p>
-    <div class="home-count" id="home-count">8 of 8</div>
+    <p class="home-sub">16 client-side typography effects. type a phrase, pick a treatment, play.</p>
+    <div class="home-count" id="home-count">16 of 16</div>
   </div>
 
   <div class="home-controls">
@@ -291,16 +291,24 @@
 <script>
 (function(){
   'use strict';
-  // 8 effects. Source of truth shared with shared/keys.js — keep aligned.
+  // 16 effects. Source of truth shared with shared/keys.js — keep aligned.
   const EFFECTS = [
-    { slug:'line',      name:'line',      cat:'Stripe' },
-    { slug:'slice',     name:'slice',     cat:'Stripe' },
-    { slug:'type',      name:'type',      cat:'Type' },
-    { slug:'mesh',      name:'mesh',      cat:'Type' },
-    { slug:'dither',    name:'dither',    cat:'Halftone' },
-    { slug:'halftone',  name:'halftone',  cat:'Halftone' },
-    { slug:'blur',      name:'blur',      cat:'Cinematic' },
-    { slug:'glitch',    name:'glitch',    cat:'Cinematic' },
+    { slug:'blur',     name:'blur',     cat:'Cinematic' },
+    { slug:'dither',   name:'dither',   cat:'Halftone' },
+    { slug:'echo',     name:'echo',     cat:'Cinematic' },
+    { slug:'glitch',   name:'glitch',   cat:'Cinematic' },
+    { slug:'halftone', name:'halftone', cat:'Halftone' },
+    { slug:'line',     name:'line',     cat:'Stripe' },
+    { slug:'mesh',     name:'mesh',     cat:'Type' },
+    { slug:'neon',     name:'neon',     cat:'Cinematic' },
+    { slug:'noise',    name:'noise',    cat:'Halftone' },
+    { slug:'outline',  name:'outline',  cat:'Type' },
+    { slug:'pixel',    name:'pixel',    cat:'Halftone' },
+    { slug:'ripple',   name:'ripple',   cat:'Cinematic' },
+    { slug:'shadow',   name:'shadow',   cat:'Cinematic' },
+    { slug:'slice',    name:'slice',    cat:'Stripe' },
+    { slug:'type',     name:'type',     cat:'Type' },
+    { slug:'wave',     name:'wave',     cat:'Type' },
   ];
 
   const CATEGORY_ORDER = ['Stripe','Type','Halftone','Cinematic'];
