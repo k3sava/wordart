@@ -19,6 +19,7 @@
       this._initTitle();
       this._initCollapse();
       panelEl.querySelectorAll('.wg-row').forEach(r => this._bindRow(r));
+      this._initModeBar();
       // Expose globally so per-frame paint code in each effect can push
       // animated/cursor values back into the sliders without firing change
       // events (see flashValues).
@@ -141,6 +142,82 @@
       handle.addEventListener('click', toggle);
       const headerBtn = document.getElementById('toggle-controls');
       if(headerBtn) headerBtn.addEventListener('click', toggle);
+    }
+    _initModeBar(){
+      const animRow  = this.rows.get('animate');
+      const interRow = this.rows.get('interactive');
+      if(!animRow && !interRow) return;
+
+      if(animRow)  animRow.style.display  = 'none';
+      if(interRow) interRow.style.display = 'none';
+
+      const bar = document.createElement('div');
+      bar.className = 'wg-mode-bar';
+
+      const defs = [];
+      if(animRow)  defs.push({ row: animRow,  key: 'animate',     label: 'Animate' });
+      if(interRow) defs.push({ row: interRow, key: 'interactive', label: 'Cursor'  });
+
+      const btns = defs.map(({ row, key, label }) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'wg-mode-btn';
+        btn.textContent = label;
+        if(this.params[key]) btn.classList.add('active');
+        bar.appendChild(btn);
+        return { btn, row, key };
+      });
+
+      const syncVisuals = () => {
+        for(const { btn, key } of btns) btn.classList.toggle('active', !!this.params[key]);
+      };
+
+      for(const { btn, row, key } of btns){
+        btn.addEventListener('click', () => {
+          const wasActive = !!this.params[key];
+          for(const b of btns){
+            if(this.params[b.key]){
+              this.params[b.key] = false;
+              const cb = b.row.querySelector('input[type=checkbox]');
+              if(cb) cb.checked = false;
+              this.emit(b.key);
+            }
+          }
+          if(!wasActive){
+            this.params[key] = true;
+            const cb = row.querySelector('input[type=checkbox]');
+            if(cb) cb.checked = true;
+            this.emit(key);
+          }
+          syncVisuals();
+        });
+      }
+
+      for(const { row: pRow, key: pKey } of btns){
+        const origWrite = pRow._write;
+        pRow._write = (v) => {
+          if(v){
+            for(const b of btns){
+              if(b.key !== pKey && this.params[b.key]){
+                this.params[b.key] = false;
+                const cb = b.row.querySelector('input[type=checkbox]');
+                if(cb) cb.checked = false;
+                this.emit(b.key);
+              }
+            }
+          }
+          origWrite(v);
+          syncVisuals();
+        };
+      }
+
+      const panelBody = this.el.querySelector('.wg-body');
+      if(panelBody) panelBody.before(bar);
+      else {
+        const title = this.el.querySelector('.wg-title');
+        if(title) title.after(bar);
+        else this.el.append(bar);
+      }
     }
     _bindRow(row){
       const key = row.dataset.key;
