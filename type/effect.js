@@ -24,7 +24,7 @@ const params = {
   invert: false,
   animate: false,
   interactive: false,
-  text: (window.WAState && window.WAState.randomPhrase) ? window.WAState.randomPhrase('playful') : 'Colony',
+  text: 'incredibly',
   textSize: 400,
   bold: false,
   italic: false,

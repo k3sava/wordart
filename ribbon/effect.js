@@ -31,7 +31,7 @@ const params = {
   height: 60,            // ribbon height modulation amplitude (px)
   animate: false,
   interactive: false,
-  text: (window.WAState && window.WAState.randomPhrase) ? window.WAState.randomPhrase('playful') : 'ribbon',
+  text: 'than a bit',
   textSize: 380,
   bold: Math.random() < 0.5,
   italic: false,

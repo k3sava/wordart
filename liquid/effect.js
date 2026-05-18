@@ -36,7 +36,7 @@ const params = {
   viscosity:   0.5,
   animate:     false,
   interactive: false,
-  text: (window.WAState?.randomPhrase?.('fluid')) ?? 'melt',
+  text: 'it is',
   textSize:   400,
   bold:        true,
   italic:      false,

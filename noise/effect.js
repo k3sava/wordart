@@ -29,7 +29,7 @@ const params = {
   invert: false,
   animate: false,
   interactive: false,
-  text: (window.WAState && window.WAState.randomPhrase) ? window.WAState.randomPhrase('playful') : 'dust',
+  text: 'bit fun',
   textSize: 400,
   bold: false,
   italic: false,

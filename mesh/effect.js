@@ -27,7 +27,7 @@ const params = {
   ampY: 0,
   animate: false,
   interactive: false,
-  text: (window.WAState && window.WAState.randomPhrase) ? window.WAState.randomPhrase('playful') : 'hello',
+  text: 'a little',
   textSize: 400,
   bold: true,
   italic: false,

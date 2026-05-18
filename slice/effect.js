@@ -35,7 +35,7 @@ const params = {
   textStretch: 1,
   animate: false,
   interactive: false,
-  text: 'hello',
+  text: 'really quite',
   textSize: 400,
   bold: Math.random() < 0.5,
   italic: Math.random() < 0.5,

@@ -30,7 +30,7 @@ const params = {
   phase: 0,
   animate: false,
   interactive: false,
-  text: (window.WAState && window.WAState.randomPhrase) ? window.WAState.randomPhrase('playful') : 'wave',
+  text: 'fun. sorry.',
   textSize: 400,
   bold: Math.random() < 0.5,
   italic: false,

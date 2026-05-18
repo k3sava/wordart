@@ -37,7 +37,7 @@ const params = {
   invert:    false,
   animate:   false,
   interactive: false,
-  text: (window.WAState && window.WAState.randomPhrase) ? window.WAState.randomPhrase('dreamy') : 'pixel',
+  text: 'maybe more',
   textSize:  400,
   bold:      true,
   italic:    false,

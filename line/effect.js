@@ -52,7 +52,7 @@ const params = {
   angle: pick([0, 45, 90, 135, 180]),
   animate: false,
   interactive: false,
-  text: 'hello',
+  text: 'okay fine',
   textSize: 400,
   bold: false,
   italic: false,
