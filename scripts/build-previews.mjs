@@ -22,15 +22,18 @@ const OUT = resolve(ROOT, 'assets/previews');
 const BASE = process.env.WORDART_BASE || 'http://localhost:8011';
 
 const ALL_EFFECTS = [
-  'blur','dither','glitch','halftone','line','mesh','slice','type',
+  'aurora','blur','chromatic','constellation','dither',
+  'glitch','halftone','line','liquid','mesh',
+  'noise','pixel','ripple','slice','type','wave',
 ];
-const onlyArg = process.argv.slice(2);
+const onlyArg = process.argv.slice(2).filter(a => !a.startsWith('--'));
+const skipExisting = process.argv.includes('--skip-existing');
 const EFFECTS = onlyArg.length ? onlyArg : ALL_EFFECTS;
 
 const FPS = Number(process.env.WA_FPS || 24);
 const DURATION_S = Number(process.env.WA_DUR || 20);
 const FRAME_COUNT = Math.round(FPS * DURATION_S);
-const VIEWPORT = { width: 480, height: 300 };
+const VIEWPORT = { width: 560, height: 360 };  // exact 280/180 ratio × 2
 const FFMPEG = process.env.FFMPEG || '/opt/homebrew/bin/ffmpeg';
 
 if (!existsSync(OUT)) mkdirSync(OUT, { recursive: true });
@@ -85,7 +88,7 @@ async function captureSlug(browser, slug) {
       '-i', join(tmp, 'f-%03d.png'),
       '-c:v', 'libx264', '-preset', 'slow', '-crf', '28',
       '-pix_fmt', 'yuv420p', '-movflags', '+faststart',
-      '-vf', 'scale=640:400:flags=lanczos',
+      '-vf', 'scale=560:360:flags=lanczos',
       dst,
     ], { encoding: 'utf8' });
     if (ff.status !== 0) throw new Error(`ffmpeg failed: ${ff.stderr?.slice(-400)}`);
@@ -100,6 +103,11 @@ async function main() {
   const browser = await chromium.launch({ headless: true });
   const results = [];
   for (const slug of EFFECTS) {
+    const dst = resolve(OUT, `${slug}.mp4`);
+    if (skipExisting && existsSync(dst)) {
+      console.log(`SKIP ${slug.padEnd(10)} already exists`);
+      continue;
+    }
     const t0 = Date.now();
     try {
       const r = await Promise.race([

@@ -1,0 +1,27 @@
+{
+  "name": "wordart",
+  "version": "1.0.0",
+  "description": "Browser-based typography toys. Type a phrase, pick an effect, export it. Eight per-effect canvases share one chrome (panel, theme, keyboard, export).",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/k3sava/wordart.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/k3sava/wordart/issues"
+  },
+  "homepage": "https://github.com/k3sava/wordart#readme",
+  "dependencies": {
+    "playwright": "^1.60.0"
+  }
+}

@@ -17,12 +17,25 @@ const PREVIEWS = resolve(ROOT, 'assets/previews');
 const OUT = resolve(ROOT, 'assets/thumbs');
 const FFMPEG = process.env.FFMPEG || '/opt/homebrew/bin/ffmpeg';
 
-const EFFECTS = ['blur','dither','glitch','halftone','line','mesh','slice','type'];
+const ALL_EFFECTS = [
+  'aurora','blur','chromatic','constellation','dither',
+  'glitch','halftone','line','liquid','mesh',
+  'noise','pixel','ripple','slice','type','wave',
+];
+const skipExisting = process.argv.includes('--skip-existing');
+const argEffects = process.argv.slice(2).filter(a => !a.startsWith('--'));
+const EFFECTS = argEffects.length ? argEffects : ALL_EFFECTS;
 
 function build() {
   if (!existsSync(OUT)) mkdirSync(OUT, { recursive: true });
   let ok = 0, missing = 0;
   for (const slug of EFFECTS) {
+    const dst = resolve(OUT, `${slug}.webp`);
+    if (skipExisting && existsSync(dst)) {
+      console.log(`SKIP ${slug}.webp already exists`);
+      ok++;
+      continue;
+    }
     const src = resolve(PREVIEWS, `${slug}.mp4`);
     if (!existsSync(src)) {
       console.log(`MISSING ${slug}.mp4`);

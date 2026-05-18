@@ -239,7 +239,7 @@ function renderAnimationFrame(t_loop){
     gui.rows.get('phase')?._write(Math.round(phase));
     gui.rows.get('amplitude')?._write(Math.round(amp));
     gui.rows.get('wavelength')?._write(Math.round(wavelength));
-    gui.rows.get('damp')?.setVal(damp);
+    gui.rows.get('damp')?._write(damp);
   }
   paint(phase, amp, damp);
 }
