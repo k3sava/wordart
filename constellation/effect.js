@@ -116,6 +116,13 @@ function rasterizeText(){
     size = Math.max(12, Math.floor(size * (w * FIT) / measured));
     tctx.font = fontSpec(size);
   }
+  // Constrain height too — large fonts on landscape or square canvases can overflow.
+  const m = tctx.measureText(params.text);
+  const textH = (m.actualBoundingBoxAscent || 0) + (m.actualBoundingBoxDescent || 0) || size * 1.1;
+  if(textH > h * FIT){
+    size = Math.max(12, Math.floor(size * (h * FIT) / textH));
+    tctx.font = fontSpec(size);
+  }
   tctx.textAlign    = 'center';
   tctx.textBaseline = 'middle';
   tctx.fillStyle    = '#ffffff';

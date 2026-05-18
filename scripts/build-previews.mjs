@@ -22,9 +22,9 @@ const OUT = resolve(ROOT, 'assets/previews');
 const BASE = process.env.WORDART_BASE || 'http://localhost:8011';
 
 const ALL_EFFECTS = [
-  'aurora','blur','chromatic','constellation','dither',
-  'glitch','halftone','line','liquid','mesh',
-  'noise','pixel','ripple','slice','type','wave',
+  'aurora','blur','cascade','chromatic','clutter','coil','collapse','constellation',
+  'construct','cylinder','dither','glitch','halftone','interference','line','liquid',
+  'mesh','noise','pixel','ribbon','ripple','slice','type','wave',
 ];
 const onlyArg = process.argv.slice(2).filter(a => !a.startsWith('--'));
 const skipExisting = process.argv.includes('--skip-existing');
