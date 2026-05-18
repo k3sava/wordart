@@ -296,9 +296,8 @@ function renderAnimationFrame(t_loop){
       [0.00,  20],
       [0.20,  25],
       [0.42, 110],
-      [0.50,  90],
-      [0.60,  45],
-      [0.63,  20],
+      [0.60, 200],   // continue forward (200° = 20° mod 180° — no reversal)
+      [0.63,  20],   // wrap: 200° → 20°, seamless with strobe start
       [0.78,  20],
       [1.00,  20],
     ]);
