@@ -259,7 +259,7 @@ function seedSignals(){
 }
 
 // Physics update — spring each star toward home (+animation override) + mouse gravity
-function updateStars(dt, animThreshold, vortexStrength, vortexT){
+function updateStars(dt, animThreshold, vortexT){
   const w = cssW(), h = cssH();
   const cx = w / 2, cy = h / 2; // canvas center for vortex
   const gravR  = params.interactive ? params.gravity : 0;
@@ -268,12 +268,12 @@ function updateStars(dt, animThreshold, vortexStrength, vortexT){
   for(const s of stars){
     // Animated home: vortex rotates around canvas center
     let tx = s.homeX, ty = s.homeY;
-    if(vortexStrength > 0){
+    if(vortexT > 0){
       const dx = s.homeX - cx, dy = s.homeY - cy;
       const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      // Angular velocity: faster close to center (like a drain)
-      const angVel = vortexStrength * (1 + 60 / dist);
-      const angle  = Math.atan2(dy, dx) + angVel * vortexT;
+      // Full 360° orbit: vortexT goes 0→2π, so stars return to base positions
+      // at loop end. Single-direction, no reversal.
+      const angle = Math.atan2(dy, dx) + vortexT;
       tx = cx + dist * Math.cos(angle);
       ty = cy + dist * Math.sin(angle);
     }
@@ -345,25 +345,15 @@ function paint(t_loop, dt){
       ])
     : params.threshold;
 
-  // Vortex: active t=0.55–0.75
-  const vortexStrength = params.animate
-    ? kf(t, [
-        [0.50, 0],
-        [0.55, 0],
-        [0.65, 3.5],
-        [0.70, 3.5],
-        [0.75, 0],
-        [1.00, 0],
-      ])
-    : 0;
-
-  // Cumulative vortex time (how far stars have rotated)
+  // Vortex orbit angle (radians): eases in from 0 to 2π for a full 360° orbit.
+  // Using a single monotone ramp avoids the direction-reversal that occurred when
+  // vortexStrength and vortexT were multiplied together with mismatched keyframes.
   const vortexT = params.animate
     ? kf(t, [
         [0.00, 0],
         [0.55, 0],
-        [0.75, 1],
-        [1.00, 1],
+        [0.75, 2 * Math.PI],  // full 360° orbit — returns to base position
+        [1.00, 2 * Math.PI],
       ])
     : 0;
 
@@ -406,7 +396,7 @@ function paint(t_loop, dt){
   }
 
   // Physics
-  updateStars(dt, animThreshold, vortexStrength, vortexT);
+  updateStars(dt, animThreshold, vortexT);
   updateSignals(dt);
 
   // ── Draw ────────────────────────────────────────────────────────────────────

@@ -225,10 +225,13 @@ function renderAnimationFrame(t_loop){
   // WOW #3 rapid alternation achieved by fast oscillation in [0.65, 0.80].
   let a;
   if(t >= 0.65 && t < 0.80){
-    // Rapid 0°↔90° strobing — 6 full oscillations in 15% of the cycle.
+    // Rapid strobing — 6 full oscillations centred at 90°. Ends at 90° (sin=0)
+    // so the kf below picks up smoothly.
     const localT = (t - 0.65) / 0.15; // 0→1
-    a = 45 + 45 * Math.sin(localT * Math.PI * 6);
+    a = 90 + 45 * Math.sin(localT * Math.PI * 6);
   } else {
+    // Monotone 0°→180°: parallel lines are symmetric so 180° looks identical
+    // to 0°, giving a seamless loop with continuous forward motion (no reversal).
     a = kf(t, [
       [0.00,   0],   // horizontal lines
       [0.10,   5],
@@ -238,8 +241,8 @@ function renderAnimationFrame(t_loop){
       [0.50,  90],   // vertical lines through text
       [0.60,  90],   // tight at 90°
       [0.65,  90],   // WOW #3 start point
-      [0.80,   0],   // returns to 0° after strobe
-      [1.00,   0],   // seamless
+      [0.80,  90],   // strobe ends back at 90°
+      [1.00, 180],   // seamless (180° = same visual as 0° for parallel lines)
     ]);
   }
 
