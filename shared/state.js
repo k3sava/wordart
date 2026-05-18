@@ -41,6 +41,16 @@
       'the font is flirting',
       'this sentence escaped',
     ],
+    cosmic: [
+      'stars',
+      'cosmos',
+      'nova',
+      'nebula',
+      'orbit',
+      'zenith',
+      'quasar',
+      'pulsar',
+    ],
   };
 
   const _bags = {};

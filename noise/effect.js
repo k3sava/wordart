@@ -102,25 +102,71 @@ function rasterizeText(){
   tctx.clearRect(0, 0, textBuf.width, textBuf.height);
   tctx.restore();
   tctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+
   const FIT = 0.92;
+  const MIN_FILL = 0.20; // wrap multi-word text when single-line < 20% of canvas height
   let size = params.textSize;
+  const words = params.text.trim().split(/\s+/);
+
+  // Attempt single-line scaling (scale down to fit width, then height)
   tctx.font = fontSpec(size);
-  let measured = tctx.measureText(params.text).width;
-  if(measured > w * FIT && measured > 0){
-    size = Math.max(12, Math.floor(size * (w * FIT) / measured));
-    tctx.font = fontSpec(size);
+  const singleW = tctx.measureText(params.text).width;
+  let singleSize = size;
+  if(singleW > w * FIT && singleW > 0){
+    singleSize = Math.max(12, Math.floor(size * (w * FIT) / singleW));
+    tctx.font = fontSpec(singleSize);
   }
-  // Constrain height too — large fonts on landscape or square canvases can overflow.
-  const m = tctx.measureText(params.text);
-  const textH = (m.actualBoundingBoxAscent || 0) + (m.actualBoundingBoxDescent || 0) || size * 1.1;
-  if(textH > h * FIT){
-    size = Math.max(12, Math.floor(size * (h * FIT) / textH));
-    tctx.font = fontSpec(size);
+  const sm = tctx.measureText(params.text);
+  const singleH = (sm.actualBoundingBoxAscent||0) + (sm.actualBoundingBoxDescent||0) || singleSize * 1.1;
+  if(singleH > h * FIT){
+    singleSize = Math.max(12, Math.floor(singleSize * (h * FIT) / singleH));
   }
-  tctx.textAlign = 'center';
+
+  tctx.textAlign    = 'center';
   tctx.textBaseline = 'middle';
-  tctx.fillStyle = '#FFFFFF';
-  tctx.fillText(params.text, w / 2, h / 2);
+  tctx.fillStyle    = '#ffffff';
+
+  // Wrap into 2 lines when single-line text would be smaller than MIN_FILL of canvas height
+  if(words.length > 1 && singleSize < h * MIN_FILL){
+    tctx.font = fontSpec(size);
+    let bestSplit = Math.ceil(words.length / 2);
+    let bestDiff = Infinity;
+    for(let i = 1; i < words.length; i++){
+      const d = Math.abs(
+        tctx.measureText(words.slice(0, i).join(' ')).width -
+        tctx.measureText(words.slice(i).join(' ')).width
+      );
+      if(d < bestDiff){ bestDiff = d; bestSplit = i; }
+    }
+    const line1 = words.slice(0, bestSplit).join(' ');
+    const line2 = words.slice(bestSplit).join(' ');
+
+    const maxLineW = Math.max(
+      tctx.measureText(line1).width,
+      tctx.measureText(line2).width
+    );
+    let lineSize = size;
+    if(maxLineW > w * FIT && maxLineW > 0){
+      lineSize = Math.max(12, Math.floor(size * (w * FIT) / maxLineW));
+    }
+    tctx.font = fontSpec(lineSize);
+    const lm = tctx.measureText(line1);
+    let lineH = (lm.actualBoundingBoxAscent||0) + (lm.actualBoundingBoxDescent||0) || lineSize * 1.1;
+    // Constrain total 2-line height (2 lines + 30% leading gap)
+    if(lineH * 2.3 > h * FIT){
+      lineSize = Math.max(12, Math.floor(lineSize * (h * FIT) / (lineH * 2.3)));
+      tctx.font = fontSpec(lineSize);
+      const lm2 = tctx.measureText(line1);
+      lineH = (lm2.actualBoundingBoxAscent||0) + (lm2.actualBoundingBoxDescent||0) || lineSize * 1.1;
+    }
+    const gap = lineH * 0.3;
+    tctx.fillText(line1, w / 2, h / 2 - lineH / 2 - gap / 2);
+    tctx.fillText(line2, w / 2, h / 2 + lineH / 2 + gap / 2);
+  } else {
+    tctx.font = fontSpec(singleSize);
+    tctx.fillText(params.text, w / 2, h / 2);
+  }
+
   textPixels = null;
   needsRebuild = true;
 }
@@ -162,7 +208,7 @@ function buildParticles(){
   const count = Math.round(params.count);
   particles = [];
   for(let i = 0; i < count; i++){
-    const src = textPts[i % textPts.length];
+    const src = textPts[Math.floor(Math.random() * textPts.length)];
     particles.push({
       homeX:      src.x,
       homeY:      src.y,

@@ -187,13 +187,13 @@
     const el = document.createElement('div');
     el.id = 'pix-splash';
     el.className = 'wa-splash';
-    const numbered = EFFECTS.map((s, i) => `<kbd>${i+1}</kbd>`).join('');
+    const numbered = EFFECTS.slice(0, 9).map((s, i) => `<kbd>${i+1}</kbd>`).join('');
     el.innerHTML = `
       <div class="wa-splash-inner">
         <div class="wa-splash-title">wordart</div>
         <div class="wa-splash-tag">${EFFECTS.length} typography effects. type a phrase. play.</div>
         <div class="wa-splash-grid">
-          <span>${numbered}</span><span>jump to effect (1–${EFFECTS.length})</span>
+          <span>${numbered}</span><span>jump to first 9 effects</span>
           <span><kbd>←</kbd> <kbd>→</kbd></span><span>previous / next</span>
           <span><kbd>/</kbd> or <kbd>⌘</kbd><kbd>K</kbd></span><span>open nav · search</span>
           <span><kbd>T</kbd></span><span>cycle theme</span>
