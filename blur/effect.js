@@ -6,22 +6,17 @@
 // Retina rather than a 1-bit bitmap.
 //
 // Animation is built FROM the primitives that make blur blur:
-//   - radius (gaussian σ): breathes |sin(2πt)|-shape so it lands at 0 TWICE
-//     per cycle. Those two crisp zeros are the legible moments.
+//   - blurAmount (gaussian σ): keyframe arc across 30s with three wow moments
 //   - letterSpacing: cosine breath through full negative→positive→negative
-//     range so glyphs collide, separate, then collide again. One full breath
-//     per cycle, phase-offset from the blur breath so legibility lands while
-//     spacing is mid-sweep (text is most readable at neutral-ish spacing).
+//     range so glyphs collide, separate, then collide again.
 //   - motionAngle: monotonic 0→2π rotation. When user enables motion blur the
 //     streak walks the compass; angle stays float and wraps seamlessly.
-// Interactive: mouse X drives blurAmount, mouse Y drives letterSpacing.
+// Interactive: WAInteract drives blurAmount (X-axis) and letterSpacing (Y-axis).
 'use strict';
 
 const ELECTRIC_COLORS = ["#000000","#ADD8E6","#FF96FF","#ffcf37","#B5651D","#ff781e","#b6b6ed","#00FF00","#FF3333"];
-const CYCLE_MS = 15000;
-// Radius peaks at quarter-cycles (t=0.25, t=0.75) and zeros at t=0, t=0.5, t=1.
-// Spacing breathes once over the cycle; its phase is shifted so peak spacing
-// chaos coincides with maximum blur, and crispness lands near neutral spacing.
+const CYCLE_MS = 30000;
+
 const ANIM = {
   blurMax:       34,
   blurFloor:     0,
@@ -31,6 +26,15 @@ const ANIM = {
 function lerp(a, b, t){ return a + (b - a) * t; }
 
 function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
+
+// Keyframe interpolator: stops = [[t, v], ...]
+function kf(t, stops){
+  for(let i = 0; i < stops.length - 1; i++){
+    const [t0, v0] = stops[i], [t1, v1] = stops[i + 1];
+    if(t >= t0 && t <= t1) return v0 + (v1 - v0) * ((t - t0) / (t1 - t0));
+  }
+  return stops[stops.length - 1][1];
+}
 
 const params = {
   blurAmount: 10,
@@ -53,7 +57,7 @@ const ctx = cv.getContext('2d');
 const textBuf = document.createElement('canvas');
 const tctx = textBuf.getContext('2d');
 const blurBuf = document.createElement('canvas');
-const bctx = blurBuf.getContext('2d', { willReadFrequently: true });
+const bctx = blurBuf.getContext('2d');
 
 let animationId = null;
 let animationStartTime = 0;
@@ -167,37 +171,24 @@ function buildBlur(){
   bctx.setTransform(DPR, 0, 0, DPR, 0, 0);
 }
 
-function hexToRgb(hex){
-  const m = /^#?([a-f0-9]{6})$/i.exec(hex);
-  if(!m) return [0, 0, 0];
-  const n = parseInt(m[1], 16);
-  return [(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff];
-}
-
 function paint(){
   window.WAGUI?.flashValues(params);
-  const bw = blurBuf.width, bh = blurBuf.height;
-  // Pull blurred pixels at full backing resolution, threshold them, paint
-  // result onto cv at backing res too.
-  const img = bctx.getImageData(0, 0, bw, bh);
-  const px = img.data;
-  const [br, bgC, bb] = hexToRgb(params.bg);
-  const TH = 128;
-  const inv = params.invert;
-  for(let i = 0; i < px.length; i += 4){
-    const a = px[i + 3];
-    const lum = a < 8 ? 0 : (px[i] + px[i + 1] + px[i + 2]) / 3;
-    const isWhite = inv ? (lum < TH) : (lum >= TH);
-    if(isWhite){
-      px[i] = 255; px[i + 1] = 255; px[i + 2] = 255;
-    } else {
-      px[i] = br;  px[i + 1] = bgC; px[i + 2] = bb;
-    }
-    px[i + 3] = 255;
-  }
+  const w = cssW(), h = cssH();
+
+  // Fill background first
   ctx.save();
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.putImageData(img, 0, 0);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.fillStyle = params.bg;
+  ctx.fillRect(0, 0, w, h);
+
+  // Threshold the blurred text via GPU contrast filter — contrast(999) turns
+  // any non-zero pixel into full white/black without a JS pixel loop.
+  // brightness(10) boosts dim edges before contrast crushes them to solid.
+  ctx.filter = params.invert
+    ? 'contrast(999) brightness(10) invert(1)'
+    : 'contrast(999) brightness(10)';
+  ctx.drawImage(blurBuf, 0, 0, blurBuf.width, blurBuf.height, 0, 0, w, h);
+  ctx.filter = 'none';
   ctx.restore();
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
 }
@@ -205,23 +196,62 @@ function paint(){
 function redraw(){ rasterizeText(); buildBlur(); paint(); }
 
 function renderAnimationFrame(t_loop){
-  // t_loop ∈ [0,1). All curves are exact-periodic in t_loop so frame 0 == frame N.
-  const TAU = Math.PI * 2;
-  // Radius: |sin(2π·t)|-style breath via (1 - cos(4π·t))/2. Zero at t=0, 0.5, 1.
-  // Two legible moments per cycle (t≈0 and t≈0.5) — crisp text emerges, smears
-  // back into a blob, re-forms, smears again.
-  const radiusShape = (1 - Math.cos(t_loop * 2 * TAU)) / 2;       // 0..1..0..1..0
-  const b = ANIM.blurFloor + radiusShape * (ANIM.blurMax - ANIM.blurFloor);
+  // t_loop ∈ [0,1). All curves are exact-periodic so frame 0 == frame N.
+  // 30-second arc with three wow moments:
+  //   t=0.00 — crisp text (radius=0)
+  //   t=0.10 — gentle glow ramp starts
+  //   t=0.20 — WOW #1: full mist (max blur + spread)
+  //   t=0.30 — text resolves back
+  //   t=0.33 — invert flips on
+  //   t=0.40 — WOW #2: inverted max blur (white field, dark text cutout)
+  //   t=0.50 — inverted crisp text
+  //   t=0.55 — invert flips back
+  //   t=0.65 — crisp normal text
+  //   t=0.70 — rapid blur ramp
+  //   t=0.80 — WOW #3: extreme blur, text barely a whisper
+  //   t=0.90 — resolves from mist
+  //   t=1.00 — crisp (seamless loop)
 
-  // letterSpacing: full cosine breath through -amp..+amp..-amp over the cycle,
-  // phase-shifted by a quarter so spacing crosses zero (most legible) right at
-  // the blur zeros. cos(0)=1 means rest spacing = +amp+bias; we want the
-  // legible moments to land at neutral spacing, so use sin(2π·t) which is 0
-  // at t=0, +1 at t=0.25, 0 at t=0.5, -1 at t=0.75, 0 at t=1.
-  const l = ANIM.spacingBias + ANIM.spacingAmp * Math.sin(t_loop * TAU);
+  const b = kf(t_loop, [
+    [0.00,  0],
+    [0.10,  4],
+    [0.20, 34],
+    [0.30,  2],
+    [0.33,  2],
+    [0.40, 34],
+    [0.50,  0],
+    [0.55,  0],
+    [0.65,  0],
+    [0.70,  6],
+    [0.80, 34],
+    [0.90,  2],
+    [1.00,  0],
+  ]);
+
+  const l = kf(t_loop, [
+    [0.00,  -8],
+    [0.10, -30],
+    [0.20,  40],
+    [0.30,  -8],
+    [0.40,  50],
+    [0.50,  -8],
+    [0.55,  -8],
+    [0.65,  -8],
+    [0.70,  20],
+    [0.80,  60],
+    [0.90,  -8],
+    [1.00,  -8],
+  ]);
+
+  // Invert flips on between t=0.33 and t=0.55
+  const shouldInvert = t_loop >= 0.33 && t_loop < 0.55;
+  if(params.invert !== shouldInvert){
+    params.invert = shouldInvert;
+    if(gui) gui.rows.get('invert')?._write(shouldInvert);
+  }
 
   // motionAngle: monotonic 0→2π. Wraps cleanly (cos/sin periodic).
-  const ang = t_loop * TAU;
+  const ang = t_loop * Math.PI * 2;
 
   params.blurAmount = b;
   params.letterSpacing = l;
@@ -307,7 +337,35 @@ function init(){
       rec: document.querySelector('.wa-rec'),
     });
   }
-  cv.addEventListener('mousemove', handleMouseMove);
+
+  // WAInteract wiring — if available, replaces old mousemove listener
+  if(window.WAInteract){
+    window.WAInteract.wire(cv, {
+      onMove(ax, ay){
+        if(!params.interactive || params.animate) return;
+        params.blurAmount    = Math.max(1, Math.round(1 + ax * 39));
+        params.letterSpacing = Math.round(-50 + ay * 150);
+        gui?.rows.get('blurAmount')?._write(params.blurAmount);
+        gui?.rows.get('letterSpacing')?._write(params.letterSpacing);
+        schedule('raster');
+      },
+      onWheel(dy){
+        params.blurAmount = Math.max(0, Math.min(40, params.blurAmount + Math.round(dy * 0.05)));
+        gui?.rows.get('blurAmount')?._write(params.blurAmount);
+        if(!params.animate) schedule('build');
+      },
+      onClick(){
+        // Cycle to a random new bg color
+        params.bg = ELECTRIC_COLORS[Math.floor(Math.random() * ELECTRIC_COLORS.length)];
+        gui?.rows.get('bg')?._write(params.bg);
+        if(!params.animate) schedule('paint');
+      },
+    });
+  } else {
+    // Fallback: legacy mousemove handler
+    cv.addEventListener('mousemove', handleMouseMove);
+  }
+
   window.addEventListener('resize', () => { fitCanvas(); schedule('raster'); });
   fitCanvas();
   redraw();

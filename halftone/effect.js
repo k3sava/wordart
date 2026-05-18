@@ -4,42 +4,27 @@
 // radius reflects soft edges. A screen-angle rotates the dot grid in the
 // classic offset-print fashion.
 //
-// Animate: dotScale ping-pongs 0 → max → 0, so text "resolves" out of dust
-// and dissolves back. screenAngle also drifts. Intro/outro IS the effect.
+// Animate: 30s wow moments with keyframed dot size, angle sweeps, and pulses.
 // Interactive: cursor X drives cellSize, cursor Y drives screenAngle.
 'use strict';
 
 const ELECTRIC_COLORS = ["#000000","#ADD8E6","#FF96FF","#ffcf37","#B5651D","#ff781e","#b6b6ed","#00FF00","#FF3333"];
-const CYCLE_MS = 15000;
-// Halftone-native animation. Three+ params move together over a seamless 15s
+const CYCLE_MS = 30000;
+// Halftone-native animation. Three+ params move together over a seamless 30s
 // loop (frame 0 == frame N exactly for deterministic params).
-//
-//   screenAngle  monotonic 0 → 360°. A rotating dot screen is the signature
-//                of offset printing; one full revolution per loop closes
-//                seamlessly because 0° and 360° are the same grid.
-//   dotScale     sin(πt) * peak — vanishes at t=0 and t=1 (loop closes),
-//                peaks at t=0.5 where the text "resolves" out of dust.
-//   cellSize     coarse → fine → coarse via cos(2πt). Returns to start.
-//                Coarse cells = crude rosette; fine = legible photoplate.
-//   softness     gentle breathe via cos(2πt); returns to start. Softer
-//                edges at peak give the dot radii a tonal gradient.
-//   gridOffset   tiny radial drift (cos(2πt), sin(2πt)) * GRID_DRIFT_PX —
-//                a full circle, so the pattern "walks" but lands home.
-//
-// Legibility moment lives near t≈0.5: dotScale peaks (full radius), cellSize
-// hits its fine minimum, screenAngle passes through 180° (a flipped but
-// re-aligned grid). Text is readable through the dots there.
 const ANIM = {
-  dotScale:    { peak: 130 },              // sin(πt) * peak
-  cellSizeMid: 10,                          // mean cell size in px
-  cellSizeAmp: 6,                           // ± px swing via cos(2πt)
-  softnessMid: 4,                           // mean softness px
-  softnessAmp: 4,                           // ± px swing
-  screenSpins: 1,                           // full revolutions per loop
-  gridDriftPx: 6,                           // grid origin orbit radius
+  dotScale:    { peak: 130 },
+  cellSizeMid: 10,
+  cellSizeAmp: 6,
+  softnessMid: 4,
+  softnessAmp: 4,
+  screenSpins: 1,
+  gridDriftPx: 6,
 };
 function lerp(a, b, t){ return a + (b - a) * t; }
 function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
+// Keyframe interpolator: stops = [[t, value], ...]
+function kf(t, stops){ for(let i=0;i<stops.length-1;i++){const[t0,v0]=stops[i],[t1,v1]=stops[i+1];if(t>=t0&&t<=t1)return v0+(v1-v0)*((t-t0)/(t1-t0));}return stops[stops.length-1][1]; }
 
 const params = {
   cellSize: 12,
@@ -222,20 +207,66 @@ function paint(){
 
 function redraw(){ rasterizeText(); buildMask(); paint(); }
 
-function applyAnimationT(t_loop){
-  // Wrap t into [0,1) so renderAt(1.0) == renderAt(0.0) exactly.
+function renderAnimationFrame(t_loop){
   const t = ((t_loop % 1) + 1) % 1;
   const TAU = Math.PI * 2;
 
-  // dotScale: sin(πt) → 0 at endpoints, 1 at t=0.5. Seamless.
-  const ds = ANIM.dotScale.peak * Math.sin(Math.PI * t);
+  // dotScale: keyframed for wow moments.
+  // Fine text at start → grow → Lichtenstein huge → pulse → settle.
+  const ds = kf(t, [
+    [0.00,  40],   // small dots, fine grid — text sharp
+    [0.15,  80],   // dots growing
+    [0.25, 130],   // WOW #1: HUGE dots, Roy Lichtenstein scale
+    [0.35, 130],   // still huge while angle sweeps
+    [0.45, 130],   // WOW #2: huge + max softness — psychedelic
+    [0.55,  60],   // shrinking while rotating
+    [0.65,  40],   // fine again at different angle
+    [0.70,  20],   // rapid pulse start: go small
+    [0.72, 130],   // WOW #3: pulse out
+    [0.74,  10],   // pulse in
+    [0.76, 130],   // pulse out
+    [0.78,  10],   // pulse in
+    [0.80, 100],   // settle
+    [0.85,  70],
+    [1.00,  40],   // back to start
+  ]);
 
-  // screenAngle: monotonic 0→360 (one rosette revolution per loop).
-  const sa = (t * 360 * ANIM.screenSpins) % 360;
+  // screenAngle: monotonic sweep for continuous rotation during wow window,
+  // then fast sweep, then settle.
+  const sa = kf(t, [
+    [0.00,   0],   // start angle
+    [0.25,  15],   // small drift before WOW #1
+    [0.35,  90],   // continuous rotation through WOW #1/2 window
+    [0.55, 180],   // rotating through
+    [0.65, 225],   // different angle for fine grid section
+    [0.70, 270],   // WOW #3 rapid oscillation base angle
+    [0.80, 360],   // fast sweep
+    [1.00, 360],   // seamless (0 == 360)
+  ]);
 
-  // cellSize: cos(2πt) breathes coarse(t=0,1) → fine(t=0.5) → coarse.
-  // Mid - amp at t=0.5 gives the fine cell when dotScale peaks → legible.
-  const cs = ANIM.cellSizeMid - ANIM.cellSizeAmp * Math.cos(TAU * t);
+  // cellSize: coarse→fine→coarse.
+  const cs = kf(t, [
+    [0.00,  8],    // fine grid
+    [0.25, 30],    // WOW #1: huge cells, Lichtenstein
+    [0.45, 32],    // WOW #2: cells still large
+    [0.55, 14],    // shrinking
+    [0.65,  8],    // fine again
+    [0.70,  6],    // WOW #3: very fine for pulse contrast
+    [0.80, 16],    // medium
+    [1.00,  8],    // back to start
+  ]);
+
+  // softness: max at WOW #2 for psychedelic blurry huge dots.
+  const soft = kf(t, [
+    [0.00,  2],
+    [0.35,  4],
+    [0.45, 14],    // WOW #2: max softness — psychedelic
+    [0.55,  6],
+    [0.65,  2],
+    [0.70,  1],
+    [0.85,  4],
+    [1.00,  2],
+  ]);
 
   // Grid origin drift: a full circle, returns home at t=1.
   params._gridDx = ANIM.gridDriftPx * Math.cos(TAU * t);
@@ -243,16 +274,16 @@ function applyAnimationT(t_loop){
 
   if(gui){
     gui.rows.get('dotScale')?._write(ds);
-    gui.rows.get('screenAngle')?._write(sa);
+    gui.rows.get('screenAngle')?._write(sa % 360);
     gui.rows.get('cellSize')?._write(cs);
+    gui.rows.get('softness')?._write(soft);
   }
   params.dotScale = ds;
-  params.screenAngle = sa;
+  params.screenAngle = sa % 360;
   params.cellSize = cs;
-}
+  params.softness = soft;
 
-function renderAnimationFrame(t_loop){
-  applyAnimationT(t_loop);
+  buildMask();
   paint();
 }
 
@@ -329,7 +360,32 @@ function init(){
       rec: document.querySelector('.wa-rec'),
     });
   }
-  cv.addEventListener('mousemove', handleMouseMove);
+  if(window.WAInteract){
+    window.WAInteract.wire(cv, {
+      onMove(ax, ay){
+        if(!params.interactive || params.animate) return;
+        params.cellSize    = Math.max(6, Math.round(6 + ax * 34));
+        params.screenAngle = Math.round(ay * 90);
+        if(gui){
+          gui.rows.get('cellSize')?._write(params.cellSize);
+          gui.rows.get('screenAngle')?._write(params.screenAngle);
+        }
+        schedule('paint');
+      },
+      onWheel(dy){
+        params.cellSize = Math.max(4, Math.min(60, params.cellSize + dy * 0.05));
+        gui?.rows.get('cellSize')?._write(params.cellSize);
+        schedule('paint');
+      },
+      onClick(ax, ay){
+        params.screenAngle = (params.screenAngle + 45) % 180;
+        gui?.rows.get('screenAngle')?._write(params.screenAngle);
+        schedule('paint');
+      },
+    });
+  } else {
+    cv.addEventListener('mousemove', handleMouseMove);
+  }
   window.addEventListener('resize', () => { fitCanvas(); schedule('raster'); });
   fitCanvas();
   redraw();

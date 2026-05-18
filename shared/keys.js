@@ -5,16 +5,16 @@
   'use strict';
   // Source of truth — mirrored in wordart/index.html.
   const EFFECTS = [
-    'blur','dither','echo','glitch','halftone',
-    'line','mesh','neon','noise','outline',
-    'pixel','ripple','shadow','slice','type','wave',
+    'aurora','blur','chromatic','constellation','dither',
+    'glitch','halftone','line','liquid','mesh',
+    'noise','pixel','ripple','slice','type','wave',
   ];
   // Categories: same partition as the homepage chips.
   const CATEGORIES = [
     ['Stripe',    ['line','slice']],
-    ['Type',      ['mesh','outline','type','wave']],
+    ['Type',      ['aurora','mesh','type','wave']],
     ['Halftone',  ['dither','halftone','noise','pixel']],
-    ['Cinematic', ['blur','echo','glitch','neon','ripple','shadow']],
+    ['Cinematic', ['blur','chromatic','constellation','glitch','liquid','ripple']],
   ];
   window.WORDART_EFFECTS = EFFECTS;
   window.WORDART_CATEGORIES = CATEGORIES;

@@ -11,6 +11,7 @@
 
 const ELECTRIC_COLORS = ["#000000","#ADD8E6","#FF96FF","#ffcf37","#B5651D","#ff781e","#b6b6ed","#00FF00","#FF3333"];
 const ANIM_PERIOD = 3000; // full sine cycle
+const CYCLE_MS = 30000;
 
 function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
 
@@ -37,6 +38,7 @@ const textBuf = document.createElement('canvas');
 const tctx = textBuf.getContext('2d', { willReadFrequently: true });
 
 let gui;
+let DPR = 1;
 let animationId = null;
 let bufferPixels = null; // Uint8ClampedArray cache of textBuf
 let letterPositions = []; // [{char, start, end}]
@@ -58,13 +60,20 @@ function schedule(level){
   });
 }
 
+function cssW(){ return cv.clientWidth || window.innerWidth; }
+function cssH(){ return cv.clientHeight || window.innerHeight; }
+
 function fitCanvas(){
-  const w = cv.clientWidth || window.innerWidth;
-  const h = cv.clientHeight || window.innerHeight;
+  DPR = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+  const w = cssW(), h = cssH();
+  const bw = Math.round(w * DPR), bh = Math.round(h * DPR);
   for(const c of [cv, textBuf]){
-    if(c.width  !== w) c.width  = w;
-    if(c.height !== h) c.height = h;
+    if(c.width  !== bw) c.width  = bw;
+    if(c.height !== bh) c.height = bh;
   }
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  tctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  bufferPixels = null;
 }
 
 function fontNameFor(){
@@ -90,29 +99,37 @@ function p5CenterY(metrics, centerY){
 }
 
 function rasterizeText(){
-  const w = textBuf.width, h = textBuf.height;
-  tctx.clearRect(0, 0, w, h);
+  const cw = cssW(), ch = cssH();
+  tctx.save();
+  tctx.setTransform(1, 0, 0, 1, 0, 0);
+  tctx.clearRect(0, 0, textBuf.width, textBuf.height);
+  tctx.restore();
+  tctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   tctx.font = fontSpec(params.textSize);
   tctx.textAlign = 'center';
   tctx.textBaseline = 'alphabetic';
   tctx.fillStyle = '#FFFFFF';
   const m = tctx.measureText(params.text);
-  tctx.fillText(params.text, w / 2, p5CenterY(m, h / 2));
+  tctx.fillText(params.text, cw / 2, p5CenterY(m, ch / 2));
 
-  // Precompute per-letter horizontal spans (matches ref: native textWidth,
-  // letters laid out left-aligned starting at (w - totalWidth)/2).
+  // Precompute per-letter horizontal spans in CSS coordinates.
   tctx.font = fontSpec(params.textSize);
   const total = tctx.measureText(params.text).width;
   bigTextWidth = total;
   bigTextHeight = params.textSize;
-  let cx = (w - total) / 2;
+  let cx = (cw - total) / 2;
   letterPositions = [];
-  for(const ch of params.text){
-    const cw = tctx.measureText(ch).width;
-    letterPositions.push({ char: ch.toUpperCase(), start: cx, end: cx + cw });
-    cx += cw;
+  for(const ch2 of params.text){
+    const charW = tctx.measureText(ch2).width;
+    letterPositions.push({ char: ch2.toUpperCase(), start: cx, end: cx + charW });
+    cx += charW;
   }
-  bufferPixels = tctx.getImageData(0, 0, w, h).data;
+  // getImageData uses backing-buffer coordinates (identity transform).
+  tctx.save();
+  tctx.setTransform(1, 0, 0, 1, 0, 0);
+  bufferPixels = tctx.getImageData(0, 0, textBuf.width, textBuf.height).data;
+  tctx.restore();
+  tctx.setTransform(DPR, 0, 0, DPR, 0, 0);
 }
 
 function currentTransition(){
@@ -125,12 +142,10 @@ function currentTransition(){
 
 function paint(progress){
   window.WAGUI?.flashValues(params);
-  const w = cv.width, h = cv.height;
-  ctx.save();
-  ctx.setTransform(1,0,0,1,0,0);
+  const w = cssW(), h = cssH();
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.fillStyle = params.bg;
   ctx.fillRect(0, 0, w, h);
-  ctx.restore();
 
   if(!bufferPixels) return;
 
@@ -138,6 +153,7 @@ function paint(progress){
   const letterSize = params.letterSize;
   const startX = (w - bigTextWidth) / 2;
   const startY = (h - bigTextHeight) / 2;
+  const bw = textBuf.width; // backing width for pixel lookup
 
   // Sampling y-range. Mirrors ref: when animating OR invert, sweep full
   // canvas (since negative space gets filled). Otherwise just the glyph band.
@@ -173,9 +189,12 @@ function paint(progress){
   // scrollIdx 0..26: 0 = show A, 26 = show target.
   const scrollIdx = progress * 26;
 
+  // Iterate in CSS space; scale to backing pixels for bufferPixels lookup.
   for(let y = yStart; y < yEnd; y += pixelSize){
     for(let x = 0; x < w; x += pixelSize){
-      const idx = (x + y * w) * 4;
+      const bx = Math.round(x * DPR);
+      const by = Math.round(y * DPR);
+      const idx = (bx + by * bw) * 4;
       const isText = bufferPixels[idx] === 255;
       if(!isText) continue;
 
@@ -211,21 +230,59 @@ function redraw(){
 
 const RASTER_KEYS = new Set(['text','textSize','bold','italic']);
 
+// Keyframe interpolator: stops = [[t, v], ...]
+function kf(t, stops){ for(let i=0;i<stops.length-1;i++){const[t0,v0]=stops[i],[t1,v1]=stops[i+1];if(t>=t0&&t<=t1)return v0+(v1-v0)*((t-t0)/(t1-t0));}return stops[stops.length-1][1]; }
+
 function renderAnimationFrame(t_loop){
-  // pingpong 0→1→0 via sin envelope: peaks mid-cycle, returns exactly to 0
-  // at both endpoints. sin(π·t_wrapped) is identically 0 at t=0 and t=1
-  // (no float-precision drift from cos), so renderAt(0) and renderAt(1)
-  // are pixel-identical and the MP4 loops seamlessly at 7.5s.
-  const t_wrapped = ((t_loop % 1) + 1) % 1;
-  const t01 = Math.sin(Math.PI * t_wrapped);
+  // t_loop ∈ [0, 1) — 30-second cycle.
+  // Drive pixelSize, letterSize, and invert through a choreographed keyframe sequence
+  // with three "wow moments" at t=0.20, t=0.50, and t=0.70.
+  const t = ((t_loop % 1) + 1) % 1;
+
+  // pixelSize: 10 → 50 → 10 → fine → back up → MAXIMUM → snap back → 10
+  params.pixelSize = Math.round(kf(t, [
+    [0.00, 10],  // fine, readable ASCII mosaic
+    [0.15, 15],  // slight drift up
+    [0.20, 50],  // WOW #1: massive cells, barely 2–3 per letter
+    [0.30, 10],  // rapid zoom-in
+    [0.40, 10],  // invert moment: stay fine
+    [0.55, 20],  // medium cells for typewriter window
+    [0.60, 25],  // cells grow
+    [0.70, 50],  // WOW #3: MAXIMUM both → abstract ASCII art
+    [0.80, 10],  // snap back to fine
+    [0.90, 10],  // hold fine before invert reverses
+    [1.00, 10],  // seamless loop
+  ]));
+
+  // letterSize: 20 → big → fine → medium → 20
+  params.letterSize = Math.round(kf(t, [
+    [0.00, 20],  // readable mosaic glyphs
+    [0.10, 12],  // ramp down → sparse symbols
+    [0.20, 50],  // WOW #1: HUGE characters
+    [0.30, 14],  // zoom-in accompaniment
+    [0.40, 18],  // invert: fine + medium
+    [0.50, 18],  // WOW #2: typewriter aesthetic
+    [0.60, 30],  // letterSize grows
+    [0.70, 50],  // WOW #3: MAXIMUM
+    [0.80, 20],  // snap back
+    [0.90, 20],  // hold
+    [1.00, 20],  // seamless
+  ]));
+
+  // invert toggle: off before t=0.40, on t=0.40–0.90, off again after.
+  const wantInvert = t >= 0.40 && t < 0.90;
+  params.invert = wantInvert;
+
   rasterizeText();
-  paint(t01);
+  // For animation we drive the scroll at a fixed full-reveal, so the mosaic
+  // always shows the actual text characters (not the A→Z scroll effect).
+  paint(1);
 }
 
 function animationLoop(){
   if(!params.animate) return;
   const elapsed = performance.now() - (animationStartTime || performance.now());
-  renderAnimationFrame((elapsed % 15000) / 15000);
+  renderAnimationFrame((elapsed % CYCLE_MS) / CYCLE_MS);
   dirty.paint = false;
   animationId = requestAnimationFrame(animationLoop);
 }
@@ -243,7 +300,7 @@ function toggleAnimation(){
 }
 
 window.WAEffect = {
-  cycleMs: 15000,
+  cycleMs: CYCLE_MS,
   renderAt(t_loop){ renderAnimationFrame(t_loop); },
   pauseRender(){ if(animationId){ cancelAnimationFrame(animationId); animationId = null; } },
   resumeRender(){
@@ -290,7 +347,30 @@ function init(){
       rec: document.querySelector('.wa-rec'),
     });
   }
-  cv.addEventListener('mousemove', handleMouseMove);
+  if(window.WAInteract){
+    window.WAInteract.wire(cv, {
+      onMove(ax, ay){
+        if(!params.interactive || params.animate) return;
+        params.pixelSize = Math.max(10, Math.round(ax * 50));
+        params.letterSize = Math.max(10, Math.round(ay * 50));
+        gui?.rows.get('pixelSize')?._write(params.pixelSize);
+        gui?.rows.get('letterSize')?._write(params.letterSize);
+        schedule('raster');
+      },
+      onWheel(dy){
+        params.pixelSize = Math.max(10, Math.min(50, params.pixelSize + Math.round(dy * 0.03)));
+        gui?.rows.get('pixelSize')?._write(params.pixelSize);
+        if(!params.animate) schedule('raster');
+      },
+      onClick(){
+        params.invert = !params.invert;
+        gui?.rows.get('invert')?.setVal(params.invert);
+        if(!params.animate) schedule('paint');
+      },
+    });
+  } else {
+    cv.addEventListener('mousemove', handleMouseMove);
+  }
   window.addEventListener('resize', () => { fitCanvas(); schedule('raster'); });
   fitCanvas();
   redraw();

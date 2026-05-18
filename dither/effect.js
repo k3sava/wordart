@@ -12,13 +12,22 @@
 'use strict';
 
 const ELECTRIC_COLORS = ["#000000","#ADD8E6","#FF96FF","#ffcf37","#B5651D","#ff781e","#b6b6ed","#00FF00","#FF3333"];
-const CYCLE_MS = 15000;
-// Intro/outro IS the dither effect: rest = all dots dropped (no text visible),
-// peak = all dots present (text reads clearly). Dots resolve in, then out.
-// pixelSize breathes the other way: thicker grain at rest, tight dots at the
-// legible peak — smaller cells = more samples per glyph = sharper read.
-// cellRotation sweeps 0 → 360° monotonically across the cycle so squares
-// turn into diamonds and back; seamless because 360° === 0° visually.
+const CYCLE_MS = 30000;
+
+// kf(t, stops) — keyframe interpolator. stops = [[t, value], ...]
+function kf(t, stops){ for(let i=0;i<stops.length-1;i++){const[t0,v0]=stops[i],[t1,v1]=stops[i+1];if(t>=t0&&t<=t1)return v0+(v1-v0)*((t-t0)/(t1-t0));}return stops[stops.length-1][1]; }
+
+// WOW animation — 30s keyframed arc:
+// t=0.00: pixelDistortion=70, pixelSize=10 → normal dither look
+// t=0.10: distortion drops → dots become dense
+// t=0.20: WOW #1 — pixelSize=5, distortion=100 → fine dense solid text (resolved)
+// t=0.30: pixelSize surges to 18 → large coarse grain
+// t=0.40: WOW #2 — distortion=20, large pixels → text barely visible through sparse huge dots
+// t=0.50: cellRotation sweeps (squares turn into diamonds)
+// t=0.60: WOW #3 — rotating diamonds + size=14 + distortion=50 → spinning texture
+// t=0.75: rotation stops, normalize
+// t=0.85: fine dots, high distortion → text fades out
+// t=1.00: back to start, seamless
 const ANIM = {
   pixelDistortion: { rest:  0, peak: 100 },
   pixelSize:       { rest: 14, peak:   5 },
@@ -293,8 +302,70 @@ function redraw(){
 }
 
 function renderAnimationFrame(t_loop){
-  const t01 = (1 - Math.cos(t_loop * 2 * Math.PI)) / 2;
-  applyAnimationT(t01, t_loop);
+  // WOW animation — 30s keyframed arc:
+  // t=0.00: pixelDistortion=70, pixelSize=10 → normal dither look
+  // t=0.10: distortion drops → dots become dense
+  // t=0.20: WOW #1 — pixelSize=5, distortion=100 → fine dense solid text (resolved)
+  // t=0.30: pixelSize surges to 18 → large coarse grain
+  // t=0.40: WOW #2 — distortion=20, large pixels → text barely visible through sparse huge dots
+  // t=0.50: cellRotation sweeps (squares turn into diamonds)
+  // t=0.60: WOW #3 — rotating diamonds + size=14 + distortion=50 → spinning texture
+  // t=0.75: rotation stops, normalize
+  // t=0.85: fine dots, high distortion → text fades out
+  // t=1.00: back to start, seamless
+
+  const pixelDistortion = kf(t_loop, [
+    [0.00, 70],
+    [0.10, 85],
+    [0.20, 100],  // WOW #1: fully resolved fine text
+    [0.30, 60],
+    [0.40, 20],   // WOW #2: sparse — text barely visible through huge dots
+    [0.50, 50],
+    [0.60, 50],   // WOW #3: medium during spinning texture
+    [0.75, 75],
+    [0.85, 30],   // fades out
+    [1.00, 70],
+  ]);
+
+  const pixelSize = kf(t_loop, [
+    [0.00, 10],
+    [0.20,  5],   // WOW #1: fine dense
+    [0.30, 18],   // large coarse
+    [0.40, 18],   // WOW #2: huge sparse
+    [0.50, 14],
+    [0.60, 14],   // WOW #3: rotating diamonds
+    [0.75,  8],
+    [0.85,  6],
+    [1.00, 10],
+  ]);
+
+  const pixelSpacing = kf(t_loop, [
+    [0.00, 0],
+    [0.20, 0],
+    [0.30, 1],
+    [0.50, 2],
+    [0.75, 0],
+    [1.00, 0],
+  ]);
+
+  // cellRotation: sweeps 0→360 from t=0.45 to t=0.75 for the spinning WOW moments
+  let cellRotation = 0;
+  if(t_loop >= 0.45 && t_loop < 0.75){
+    cellRotation = ((t_loop - 0.45) / 0.30) * 360;
+  }
+
+  params.pixelDistortion = Math.round(pixelDistortion);
+  params.pixelSize       = Math.round(pixelSize);
+  params.pixelSpacing    = Math.round(pixelSpacing);
+  params.cellRotation    = cellRotation;
+
+  if(gui){
+    gui.rows.get('pixelDistortion')?._write(params.pixelDistortion);
+    gui.rows.get('pixelSize')?._write(params.pixelSize);
+    gui.rows.get('pixelSpacing')?._write(params.pixelSpacing);
+    gui.rows.get('cellRotation')?._write(Math.round(cellRotation));
+  }
+
   // Seed the per-frame grain by t_loop so the loop closes exactly: seed at
   // t=0 equals seed at t=1. Each frame still rebuilds (grain "boils") but
   // the sequence at the endpoints is identical.
@@ -389,7 +460,32 @@ function init(){
       rec: document.querySelector('.wa-rec'),
     });
   }
-  cv.addEventListener('mousemove', handleMouseMove);
+  if(window.WAInteract){
+    window.WAInteract.wire(cv, {
+      onMove(ax, ay){
+        if(!params.interactive || params.animate) return;
+        const ns = Math.max(1, Math.round(1 + ax * 19));
+        const nd = Math.round(ay * 100);
+        let touched = false;
+        if(ns !== params.pixelSize){ params.pixelSize = ns; touched = true; gui && gui.rows.get('pixelSize')?._write(ns); }
+        if(nd !== params.pixelDistortion){ params.pixelDistortion = nd; touched = true; gui && gui.rows.get('pixelDistortion')?._write(nd); }
+        if(touched) schedule('build');
+        else schedule('paint');
+      },
+      onWheel(dy){
+        params.pixelSize = Math.max(1, Math.min(20, params.pixelSize + Math.round(dy * 0.02)));
+        gui?.rows.get('pixelSize')?._write(params.pixelSize);
+        if(!params.animate) schedule('build');
+      },
+      onClick(ax, ay){
+        params.rounded = !params.rounded;
+        gui?.rows.get('rounded')?.setVal(params.rounded);
+        if(!params.animate) schedule('paint');
+      },
+    });
+  } else {
+    cv.addEventListener('mousemove', handleMouseMove);
+  }
   window.addEventListener('resize', () => { fitCanvas(); schedule('raster'); });
   fitCanvas();
   redraw();

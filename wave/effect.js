@@ -7,19 +7,20 @@
 // rasterizeText() to build charLayouts, then draw each character individually
 // to the canvas in paint() at its wave-displaced y coordinate.
 //
-// Animate: phase scrolls monotonically (4 full rotations across one cycle —
-// integer turns so the loop is seamless). Amplitude follows a sin(π·t)
-// envelope — zero at t=0 and t=1 (seamless), peak at t=0.5. This creates a
-// gentle "rise and fall of the sea" feel.
+// Animate: 30s keyframed arc with WOW moments — high-freq chaos, slow single
+// wave, phase reversal tear, typographic madness. Seamless loop.
 // Interactive: cursor X → frequency, cursor Y → amplitude.
 'use strict';
 
 const ELECTRIC_COLORS = ["#000000","#ADD8E6","#FF96FF","#ffcf37","#B5651D","#ff781e","#b6b6ed","#00FF00","#FF3333"];
-const CYCLE_MS = 15000;
+const CYCLE_MS = 30000;
 const ANIM = {
   amplitudePeak: 140, // peak amplitude (CSS px) reached at t=0.5
   phaseTurns: 4,      // full phase sweeps per cycle (integer → seamless)
 };
+
+// kf(t, stops) — keyframe interpolator. stops = [[t, value], ...]
+function kf(t, stops){ for(let i=0;i<stops.length-1;i++){const[t0,v0]=stops[i],[t1,v1]=stops[i+1];if(t>=t0&&t<=t1)return v0+(v1-v0)*((t-t0)/(t1-t0));}return stops[stops.length-1][1]; }
 
 function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
 
@@ -79,21 +80,23 @@ function fitCanvas(){
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
 }
 
-function fontSpec(size){
-  const w = params.bold   ? 'bold'   : 'normal';
-  const s = params.italic ? 'italic' : 'normal';
+function fontSpec(size, boldOverride, italicOverride){
+  const b = boldOverride   != null ? boldOverride   : params.bold;
+  const it = italicOverride != null ? italicOverride : params.italic;
+  const w = b  ? 'bold'   : 'normal';
+  const s = it ? 'italic' : 'normal';
   return `${s} ${w} ${size}px Helvetica`;
 }
 
 // rasterizeText() does not draw pixels — it measures character widths using
 // the canvas 2D context and builds charLayouts for paint() to use.
-function rasterizeText(){
+function rasterizeText(boldOverride, italicOverride){
   const w = cssW();
   const FIT = 0.92;
   let size = params.textSize;
 
   ctx.save();
-  ctx.font = fontSpec(size);
+  ctx.font = fontSpec(size, boldOverride, italicOverride);
 
   // Measure total width at requested size.
   let total = 0;
@@ -102,7 +105,7 @@ function rasterizeText(){
   // Scale down if the string is wider than the canvas.
   if(total > w * FIT && total > 0){
     size = Math.max(12, Math.floor(size * (w * FIT) / total));
-    ctx.font = fontSpec(size);
+    ctx.font = fontSpec(size, boldOverride, italicOverride);
   }
 
   // Record per-character x offset (cumulative) and width.
@@ -122,7 +125,7 @@ function rasterizeText(){
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
 }
 
-function paint(overridePhase, overrideAmplitude){
+function paint(overridePhase, overrideAmplitude, boldOverride, italicOverride){
   window.WAGUI?.flashValues(params);
   const w = cssW(), h = cssH();
 
@@ -143,7 +146,9 @@ function paint(overridePhase, overrideAmplitude){
   ctx.fillRect(0, 0, w, h);
 
   // Draw each character at its wave-displaced position.
-  ctx.font          = fontSpec(computedSize);
+  const b  = boldOverride   != null ? boldOverride   : params.bold;
+  const it = italicOverride != null ? italicOverride : params.italic;
+  ctx.font          = fontSpec(computedSize, b, it);
   ctx.textAlign     = 'left';
   ctx.textBaseline  = 'middle';
   ctx.fillStyle     = fgColor;
@@ -166,22 +171,71 @@ function paint(overridePhase, overrideAmplitude){
 function redraw(){ rasterizeText(); paint(); }
 
 function renderAnimationFrame(t_loop){
-  // Phase: monotonic scroll at phaseTurns rotations per cycle.
-  // phaseTurns is an integer → phase at t=1 is 360 × phaseTurns ≡ 0 (mod 360).
-  // Seamless: sin is periodic at 360°.
-  const phase = (t_loop * 360 * ANIM.phaseTurns) % 360;
+  // WOW animation — 30s keyframed arc:
+  // t=0.00: amplitude=0 (flat, crisp text)
+  // t=0.10: gentle sine wave emerges
+  // t=0.20: WOW #1 — amplitude=200 + frequency=20 → text shattered into high-freq noise
+  // t=0.30: frequency drops to 1 → single massive slow wave, text barely readable
+  // t=0.40: WOW #2 — phase reversal mid-cycle + max amplitude → text inverts up/down
+  // t=0.50: amplitude drops, text resolves
+  // t=0.60: second build-up with bold text animating on/off
+  // t=0.70: WOW #3 — italic + bold + max wave → typographic madness
+  // t=0.85: all parameters normalize
+  // t=1.00: amplitude=0, seamless
 
-  // Amplitude envelope: sin(π·t) — 0 at t=0 and t=1 (both endpoints zero,
-  // seamless), peak of 1 at t=0.5. Gives a single swell each loop.
-  const amp = ANIM.amplitudePeak * Math.sin(t_loop * Math.PI);
+  const amp = kf(t_loop, [
+    [0.00,   0],
+    [0.10,  50],
+    [0.20, 200],  // WOW #1: shattered high-freq
+    [0.30, 180],  // single slow wave
+    [0.40, 200],  // WOW #2: phase reversal peak
+    [0.50,  10],  // resolves
+    [0.60,  80],  // second build
+    [0.70, 200],  // WOW #3: typographic madness
+    [0.85,  20],
+    [1.00,   0],
+  ]);
 
-  params.phase     = phase;
-  params.amplitude = amp;
-  if(gui){
-    gui.rows.get('phase')?._write(phase);
-    gui.rows.get('amplitude')?._write(amp);
+  const freq = kf(t_loop, [
+    [0.00,  3],
+    [0.10,  4],
+    [0.20, 20],  // WOW #1: high freq chaos
+    [0.30,  1],  // drops to single massive wave
+    [0.40,  2],
+    [0.50,  3],
+    [0.60,  5],
+    [0.70, 18],  // WOW #3: high freq madness
+    [0.85,  4],
+    [1.00,  3],
+  ]);
+
+  // Phase: monotonic + phase reversal at WOW #2 (t=0.38-0.42)
+  let phase;
+  if(t_loop >= 0.38 && t_loop < 0.42){
+    // rapid 180° flip to create tear/invert illusion
+    const sub = (t_loop - 0.38) / 0.04;
+    phase = (t_loop * 360 * 4 + sub * 180) % 360;
+  } else {
+    phase = (t_loop * 360 * 4) % 360;
   }
-  paint(phase, amp);
+
+  // Bold and italic animate during WOW #3
+  const boldOn   = t_loop >= 0.62 && t_loop < 0.85 ? (Math.floor(t_loop * 8) % 2 === 0) : params.bold;
+  const italicOn = t_loop >= 0.68 && t_loop < 0.85;
+
+  params.amplitude = amp;
+  params.frequency = freq;
+  params.phase     = phase;
+
+  if(gui){
+    gui.rows.get('phase')?._write(Math.round(phase));
+    gui.rows.get('amplitude')?._write(Math.round(amp));
+    gui.rows.get('frequency')?._write(Math.round(freq));
+  }
+
+  // Re-measure if bold/italic changed this frame
+  rasterizeText(boldOn, italicOn);
+  paint(phase, amp, boldOn, italicOn);
 }
 
 function animationLoop(){
@@ -255,7 +309,32 @@ function init(){
       rec: document.querySelector('.wa-rec'),
     });
   }
-  cv.addEventListener('mousemove', handleMouseMove);
+  if(window.WAInteract){
+    window.WAInteract.wire(cv, {
+      onMove(ax, ay){
+        if(!params.interactive || params.animate) return;
+        params.frequency = Math.max(1, 1 + ax * 19);
+        params.amplitude = Math.round((1 - ay) * 200);
+        if(gui){
+          gui.rows.get('frequency')?._write(params.frequency);
+          gui.rows.get('amplitude')?._write(params.amplitude);
+        }
+        schedule('paint');
+      },
+      onWheel(dy){
+        params.amplitude = Math.max(0, Math.min(200, params.amplitude + dy * 0.1));
+        gui?.rows.get('amplitude')?._write(Math.round(params.amplitude));
+        if(!params.animate) schedule('paint');
+      },
+      onClick(ax, ay){
+        params.phase = Math.round(Math.random() * 360);
+        gui?.rows.get('phase')?._write(params.phase);
+        if(!params.animate) schedule('paint');
+      },
+    });
+  } else {
+    cv.addEventListener('mousemove', handleMouseMove);
+  }
   window.addEventListener('resize', () => { fitCanvas(); schedule('raster'); });
   fitCanvas();
   redraw();

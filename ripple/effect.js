@@ -15,15 +15,18 @@
 // handles bilinear resampling per strip, giving sub-pixel smooth anti-aliased
 // output at full Retina resolution.
 //
-// Seamless loop: amplitude breathes 0→peak→0 via sin(πt); phase sweeps an
-// integer number of full turns so sin closes exactly at t=1.
+// Animate: 30s keyframed arc with WOW moments — tight intense rings, deep
+// slow ripple, rapid phase surges. Seamless loop.
 
 const ELECTRIC_COLORS = ["#000000","#ADD8E6","#FF96FF","#ffcf37","#B5651D","#ff781e","#b6b6ed","#00FF00","#FF3333"];
-const CYCLE_MS = 15000;
+const CYCLE_MS = 30000;
 const ANIM = {
-  amplitudePeak: 40,
+  amplitudePeak: 60,
   phaseTurns:    3,   // integer turns → sin(2π·n·0) = sin(2π·n·1) = 0, loop closes
 };
+
+// kf(t, stops) — keyframe interpolator. stops = [[t, value], ...]
+function kf(t, stops){ for(let i=0;i<stops.length-1;i++){const[t0,v0]=stops[i],[t1,v1]=stops[i+1];if(t>=t0&&t<=t1)return v0+(v1-v0)*((t-t0)/(t1-t0));}return stops[stops.length-1][1]; }
 
 function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
 
@@ -111,14 +114,14 @@ function rasterizeText(){
   tctx.fillText(params.text, w / 2, h / 2);
 }
 
-function paint(overridePhase, overrideAmp){
+function paint(overridePhase, overrideAmp, overrideDamp){
   window.WAGUI?.flashValues(params);
   const w = cssW(), h = cssH();
   const cx = w / 2, cy = h / 2;
   const amp      = overrideAmp   != null ? overrideAmp   : params.amplitude;
   const lambda   = Math.max(1, params.wavelength);
   const phaseRad = ((overridePhase != null ? overridePhase : params.phase)) * Math.PI / 180;
-  const doDamp   = params.damp;
+  const doDamp   = overrideDamp != null ? overrideDamp : params.damp;
   const maxR     = Math.sqrt(cx * cx + cy * cy) || 1;
   const bw       = textBuf.width;
   const bh       = textBuf.height;
@@ -176,17 +179,69 @@ function paint(overridePhase, overrideAmp){
 function redraw(){ rasterizeText(); paint(); }
 
 function renderAnimationFrame(t_loop){
-  // Phase scrolls phaseTurns full rotations — integer turns close the loop.
-  const phase = (t_loop * 360 * ANIM.phaseTurns) % 360;
-  // Amplitude breathes: 0 at t=0 and t=1 (crisp text), peak at t=0.5.
-  const amp   = ANIM.amplitudePeak * Math.sin(t_loop * Math.PI);
-  params.phase     = phase;
-  params.amplitude = amp;
-  if(gui){
-    gui.rows.get('phase')?._write(phase);
-    gui.rows.get('amplitude')?._write(amp);
+  // WOW animation — 30s keyframed arc:
+  // t=0.00: amplitude=0, flat crisp text
+  // t=0.10: gentle ripple appears
+  // t=0.20: WOW #1 — amplitude=60, wavelength=20 → tight intense rings, text unrecognizable
+  // t=0.30: wavelength grows → few massive slow waves
+  // t=0.40: WOW #2 — amplitude=60, wavelength=80 → deep slow ripple like large pond disturbance
+  // t=0.50: amplitude drops, text resolves
+  // t=0.60: damp toggles on → center stays crisp, edges ripple
+  // t=0.70: WOW #3 — rapid phase surges + amplitude surges → rings travel both in and out
+  // t=0.85: damp stays on, amplitude normalizes
+  // t=1.00: amplitude=0, seamless
+
+  const amp = kf(t_loop, [
+    [0.00,  0],
+    [0.10, 20],
+    [0.20, 60],  // WOW #1: tight intense rings
+    [0.30, 55],  // massive slow wave
+    [0.40, 60],  // WOW #2: deep slow ripple
+    [0.50,  5],  // resolves
+    [0.60, 25],  // damp on: center crisp, edges ripple
+    [0.70, 60],  // WOW #3: rings travel both directions
+    [0.85, 20],
+    [1.00,  0],
+  ]);
+
+  const wavelength = kf(t_loop, [
+    [0.00,  80],
+    [0.10,  50],
+    [0.20,  20],   // WOW #1: tight rings
+    [0.30, 160],   // massive slow waves
+    [0.40,  80],   // WOW #2: deep pond ripple
+    [0.50,  60],
+    [0.60,  50],
+    [0.70,  30],   // WOW #3: tight during surges
+    [0.85,  60],
+    [1.00,  80],
+  ]);
+
+  // WOW #3: phase surges rapidly to simulate rings appearing to travel inward and outward
+  let phase;
+  if(t_loop >= 0.68 && t_loop < 0.82){
+    // 4 rapid phase oscillations in this window (back and forth)
+    const sub = (t_loop - 0.68) / 0.14;
+    phase = (t_loop * 360 * 3 + Math.sin(sub * 4 * 2 * Math.PI) * 90) % 360;
+  } else {
+    phase = (t_loop * 360 * 3) % 360;
   }
-  paint(phase, amp);
+
+  // damp toggles on from t=0.58 onwards until t=0.90
+  const damp = t_loop >= 0.58 && t_loop < 0.90;
+
+  params.phase      = phase;
+  params.amplitude  = amp;
+  params.wavelength = Math.round(wavelength);
+  params.damp       = damp;
+
+  if(gui){
+    gui.rows.get('phase')?._write(Math.round(phase));
+    gui.rows.get('amplitude')?._write(Math.round(amp));
+    gui.rows.get('wavelength')?._write(Math.round(wavelength));
+    gui.rows.get('damp')?.setVal(damp);
+  }
+  paint(phase, amp, damp);
 }
 
 function animationLoop(){
@@ -258,7 +313,32 @@ function init(){
       rec:     document.querySelector('.wa-rec'),
     });
   }
-  cv.addEventListener('mousemove', handleMouseMove);
+  if(window.WAInteract){
+    window.WAInteract.wire(cv, {
+      onMove(ax, ay){
+        if(!params.interactive || params.animate) return;
+        params.amplitude  = Math.round(ax * 60);
+        params.wavelength = Math.max(10, Math.round(10 + ay * 190));
+        if(gui){
+          gui.rows.get('amplitude')?._write(params.amplitude);
+          gui.rows.get('wavelength')?._write(params.wavelength);
+        }
+        schedule('paint');
+      },
+      onWheel(dy){
+        params.wavelength = Math.max(10, Math.min(200, params.wavelength + dy * 0.1));
+        gui?.rows.get('wavelength')?._write(Math.round(params.wavelength));
+        if(!params.animate) schedule('paint');
+      },
+      onClick(ax, ay){
+        params.phase = Math.round(Math.random() * 360);
+        gui?.rows.get('phase')?._write(params.phase);
+        if(!params.animate) schedule('paint');
+      },
+    });
+  } else {
+    cv.addEventListener('mousemove', handleMouseMove);
+  }
   window.addEventListener('resize', () => { fitCanvas(); schedule('raster'); });
   fitCanvas();
   redraw();

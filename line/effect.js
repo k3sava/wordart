@@ -12,14 +12,24 @@
 //      Walk in steps of max(lineSize/2, 1) CSS px. At each step sample the
 //      text mask (XOR invert). Build polylines that break at mask transitions.
 //   4. Stroke every polyline in white at lineWidth = lineSize.
+//
+// Animation — 30s wow moments:
+//   t=0.00: tight lines (small spacing), angle=0 (horizontal)
+//   t=0.10: spacing grows
+//   t=0.20: WOW #1 — WIDE spacing, few lines, text reads as gaps
+//   t=0.30: angle starts sweeping (lines rotate)
+//   t=0.40: WOW #2 — maximum sweep speed, lines spinning like a fan
+//   t=0.50: angle at 90° (vertical lines through text)
+//   t=0.60: spacing narrows, lines tight at 90°
+//   t=0.65: WOW #3 — rapid alternation 0°↔90° + spacing pulses
+//   t=0.80: angle returns to 0°, spacing normalizes
+//   t=1.00: tight horizontal lines, seamless
 'use strict';
 
 const STRIPED_ANIMALS = ["Zebra","Tiger","Okapi","Bongo","Quagga","Tapir","Numbat","Thylacine","Zonkey","Zorse","Quoll","Hyena","Serval","Civet","Caracal"];
 const ELECTRIC_COLORS = ["#000000","#ADD8E6","#FF96FF","#ffcf37","#B5651D","#ff781e","#b6b6ed","#00FF00","#FF3333"];
-const CYCLE_MS = 15000;
-// Per-param rest (t=0) and peak (t=0.5) values. Animation curve is a smooth
-// (1 - cos)/2 pingpong so t01 sweeps 0 → 1 → 0 over CYCLE_MS, making the
-// recording perfectly loopable end-to-start.
+const CYCLE_MS = 30000;
+// Per-param rest (t=0) and peak (t=0.5) values for legacy pingpong reference.
 const ANIM = {
   angle:       { rest:   0, peak:  90 },
   lineSize:    { rest:  14, peak:   3 },
@@ -28,10 +38,11 @@ const ANIM = {
 function lerp(a, b, t){ return a + (b - a) * t; }
 function pingpongT(elapsed){ return (1 - Math.cos((elapsed % CYCLE_MS) / CYCLE_MS * Math.PI * 2)) / 2; }
 // Envelope: 0 → 1 → 0 across one cycle (smooth sine). Drives text scale so
-// the phrase appears at the start, peaks mid-cycle, and disappears at the end —
-// the intro/outro the user asked for. Used by rasterizeText().
+// the phrase appears at the start, peaks mid-cycle, and disappears at the end.
 function envelopeT(elapsed){ return Math.sin((elapsed % CYCLE_MS) / CYCLE_MS * Math.PI); }
 let _envScale = 1;
+// Keyframe interpolator: stops = [[t, value], ...]
+function kf(t, stops){ for(let i=0;i<stops.length-1;i++){const[t0,v0]=stops[i],[t1,v1]=stops[i+1];if(t>=t0&&t<=t1)return v0+(v1-v0)*((t-t0)/(t1-t0));}return stops[stops.length-1][1]; }
 
 function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
 
@@ -204,31 +215,73 @@ function paint(){
 
 function redraw(){ rasterizeText(); invalidateRaster(); buildLines(); paint(); }
 
-// Angle gets its own monotonic sweep — one full 360° rotation per cycle so
-// the start and end frames coincide naturally (no reversal). Other params
-// still pingpong via t01 so the text intro/outro reads cleanly.
-function applyAnimationT(t01, t_full){
-  const dir = (params.direction === undefined ? 1 : (params.direction ? 1 : -1));
-  const a   = ((t_full * 360 * dir) % 360 + 360) % 360;
-  const ls  = Math.max(1, lerp(ANIM.lineSize.rest, ANIM.lineSize.peak, t01));
-  const lg  = Math.max(0, lerp(ANIM.lineSpacing.rest, ANIM.lineSpacing.peak, t01));
+function renderAnimationFrame(t_loop){
+  const t = ((t_loop % 1) + 1) % 1;
+
+  // Envelope: text present throughout the full 30s loop.
+  _envScale = 1;
+
+  // Angle: keyframed for wow moments.
+  // WOW #3 rapid alternation achieved by fast oscillation in [0.65, 0.80].
+  let a;
+  if(t >= 0.65 && t < 0.80){
+    // Rapid 0°↔90° strobing — 6 full oscillations in 15% of the cycle.
+    const localT = (t - 0.65) / 0.15; // 0→1
+    a = 45 + 45 * Math.sin(localT * Math.PI * 6);
+  } else {
+    a = kf(t, [
+      [0.00,   0],   // horizontal lines
+      [0.10,   5],
+      [0.20,  10],   // WOW #1: wide spacing, slight angle
+      [0.30,  30],   // angle begins sweeping
+      [0.40,  60],   // WOW #2: fast sweep, fan effect
+      [0.50,  90],   // vertical lines through text
+      [0.60,  90],   // tight at 90°
+      [0.65,  90],   // WOW #3 start point
+      [0.80,   0],   // returns to 0° after strobe
+      [1.00,   0],   // seamless
+    ]);
+  }
+
+  // lineSize: wide at WOW #1 (few bold lines), narrow at WOW #2/3.
+  const ls = kf(t, [
+    [0.00, 12],   // tight lines
+    [0.10, 18],   // spacing grows
+    [0.20, 28],   // WOW #1: very few wide lines
+    [0.30, 20],   // still wide while angle sweeps
+    [0.40,  8],   // WOW #2: finer lines spinning fast
+    [0.50,  6],   // fine vertical
+    [0.60,  4],   // very tight
+    [0.65,  4],   // WOW #3: tight for contrast
+    [0.72, 24],   // pulse wide
+    [0.78,  4],   // pulse tight
+    [0.80, 10],   // normalise
+    [1.00, 12],   // back to start
+  ]);
+
+  // lineSpacing: 0 at tight moments, large at WOW #1.
+  const lg = kf(t, [
+    [0.00,  0],
+    [0.10,  4],
+    [0.20, 20],   // WOW #1: text reads as GAPS between lines
+    [0.30, 10],
+    [0.40,  2],
+    [0.50,  1],
+    [0.60,  0],
+    [0.65,  0],
+    [0.80,  2],
+    [1.00,  0],
+  ]);
+
   if(gui){
     gui.rows.get('angle')?._write(a);
     gui.rows.get('lineSize')?._write(ls);
     gui.rows.get('lineSpacing')?._write(lg);
   }
-  // Override quantised slider values so the canvas sees smooth floats.
   params.angle = a;
-  params.lineSize = ls;
-  params.lineSpacing = lg;
-}
+  params.lineSize = Math.max(1, ls);
+  params.lineSpacing = Math.max(0, lg);
 
-// Render a specific point in the animation cycle. Called by both the live
-// animation loop and the offline video exporter. t_loop ∈ [0, 1].
-function renderAnimationFrame(t_loop){
-  _envScale = Math.sin(t_loop * Math.PI);
-  const t01 = (1 - Math.cos(t_loop * 2 * Math.PI)) / 2;
-  applyAnimationT(t01, t_loop);
   rasterizeText();
   invalidateRaster();
   buildLines();
@@ -254,7 +307,7 @@ function toggleAnimation(){
   }
 }
 
-// Recording protocol — export.js calls these to force a clean 15 s loop.
+// Recording protocol — export.js calls these to force a clean 30 s loop.
 window.WAEffect = {
   cycleMs: CYCLE_MS,
   // Render at a specific point in the loop — used by the offline exporter
@@ -302,8 +355,33 @@ function init(){
     else if(BUILD_KEYS.has(key)) schedule('build');
     else schedule('paint');
   });
-  cv.addEventListener('mousemove', handleMouseMove);
-  cv.addEventListener('mouseleave', () => { mouseX = mouseY = -9999; });
+  if(window.WAInteract){
+    window.WAInteract.wire(cv, {
+      onMove(ax, ay){
+        if(!params.interactive || params.animate) return;
+        params.angle    = Math.round(ax * 180);
+        params.lineSize = Math.max(1, Math.round(1 + ay * 19));
+        if(gui){
+          gui.rows.get('angle')?._write(params.angle);
+          gui.rows.get('lineSize')?._write(params.lineSize);
+        }
+        schedule('build');
+      },
+      onWheel(dy){
+        params.lineSpacing = Math.max(2, Math.min(50, params.lineSpacing + dy * 0.03));
+        gui?.rows.get('lineSpacing')?._write(params.lineSpacing);
+        schedule('build');
+      },
+      onClick(ax, ay){
+        params.angle = Math.random() * 180;
+        gui?.rows.get('angle')?._write(params.angle);
+        schedule('build');
+      },
+    });
+  } else {
+    cv.addEventListener('mousemove', handleMouseMove);
+    cv.addEventListener('mouseleave', () => { mouseX = mouseY = -9999; });
+  }
   if(window.WAExport){
     window.WAExport.wire({
       canvas: cv,

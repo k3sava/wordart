@@ -8,22 +8,21 @@
 // On a black background you get classic CRT chroma split; on a coloured bg
 // the channels punch through and read as separation against the bg.
 //
-// Animation — controlled wrongness, two legibility moments per loop:
-//   * rgbOffset follows cos(2π·t) · AMP — channels swing +amp → 0 → −amp → 0
-//     → +amp. The two zero-crossings (t≈0.25, t≈0.75) snap channels into
-//     alignment: text reads clean. The polarity flip mid-loop means R and B
-//     swap sides — wrongness asymmetric, not symmetric.
-//   * tearAmount tracks |sin(2π·t)|^0.6 — tears collapse to 0 *exactly* where
-//     RGB collapses, then re-blow between. Power < 1 sharpens the legible
-//     window and slurs the chaos.
-//   * tearDensity rides 1 − |sin(2π·t)|^1.4 inverse — fewer-but-wider tears
-//     at chaos peak, denser-but-shorter at legibility approach.
-//   * rollSpeed scrolls the band pattern vertically — the "tape" creeps so
-//     successive frames evolve instead of pulsing in place.
+// Animation — 30s wow moments:
+//   t=0.00: crisp, intensity=0 (clean text)
+//   t=0.10: subtle glitches begin
+//   t=0.20: WOW #1 — full glitch storm, channel separation, heavy tears
+//   t=0.35: partial calm, scanlines heavy
+//   t=0.45: WOW #2 — RGB channels fully separated, maximum offset
+//   t=0.55: channels snap together, brief clarity
+//   t=0.65: eerie calm, intensity=0
+//   t=0.70: WOW #3 — rapid strobing, digital explosion
+//   t=0.85: fast decay to calm
+//   t=1.00: intensity=0, seamless loop
 'use strict';
 
 const ELECTRIC_COLORS = ["#000000","#ADD8E6","#FF96FF","#ffcf37","#B5651D","#ff781e","#b6b6ed","#00FF00","#FF3333"];
-const CYCLE_MS = 15000;
+const CYCLE_MS = 30000;
 // Curve amplitudes (peaks, not rest values — wave does the rest=0 work).
 const ANIM = {
   rgbOffsetAmp:  120,
@@ -34,6 +33,8 @@ const ANIM = {
 };
 function lerp(a, b, t){ return a + (b - a) * t; }
 function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
+// Keyframe interpolator: stops = [[t, value], ...]
+function kf(t, stops){ for(let i=0;i<stops.length-1;i++){const[t0,v0]=stops[i],[t1,v1]=stops[i+1];if(t>=t0&&t<=t1)return v0+(v1-v0)*((t-t0)/(t1-t0));}return stops[stops.length-1][1]; }
 
 const params = {
   rgbOffset: 24,
@@ -241,27 +242,67 @@ function applyTears(w, h){
 
 function redraw(){ rasterizeText(); paint(); }
 
-function applyAnimationT(t_loop){
-  // Cosine wave: crosses 0 at t=0.25 and t=0.75 → two clean-text moments per
-  // loop. cos(0)=1 so frame 0 == frame 1 (seamless), and the sign flip means
-  // R/B channels swap which side they're on at the loop midpoint.
-  const phase = 2 * Math.PI * t_loop;
-  rgbOffsetSigned = Math.cos(phase) * ANIM.rgbOffsetAmp;
+function renderAnimationFrame(t_loop){
+  const t = ((t_loop % 1) + 1) % 1;
 
-  // |sin(2π·t)| peaks at 0.25 and 0.75 — but those are the *clean* moments.
-  // We want the opposite: tear loud at 0, 0.5, 1; quiet at 0.25, 0.75. Use
-  // |cos(2π·t)| instead, gated by a soft power curve.
-  const tearGate = Math.pow(Math.abs(Math.cos(phase)), 0.6);
-  const ta = tearGate * ANIM.tearAmountAmp;
-  // Density: high at chaos peaks, low at alignment (so the legible moment
-  // is genuinely clean, not partially torn).
-  const td = lerp(ANIM.tearDensityLo, ANIM.tearDensityHi, tearGate);
-  // Vertical roll — store as a fractional bands count; converted to px in
-  // applyTears against the live band height so it wraps exactly each cycle.
-  rollOffsetPx = t_loop * ANIM.rollBandsPerCycle; // unit: bands, not px
+  // RGB offset: keyframed for wow moments.
+  // Positive = R shifts left, B shifts right. Sign flip at WOW#2.
+  rgbOffsetSigned = kf(t, [
+    [0.00,   0],   // crisp start
+    [0.10,  12],   // subtle glitch begins
+    [0.20, 120],   // WOW #1: full channel separation
+    [0.30,  40],   // partial calm
+    [0.35,  25],   // settling
+    [0.45,-120],   // WOW #2: maximum separation, channels flipped
+    [0.55,   0],   // snap to aligned — brief clarity
+    [0.65,   0],   // eerie calm
+    [0.70, 120],   // WOW #3: explosion begins
+    [0.75,  -80],  // rapid strobe — alternating
+    [0.80,  100],  // still strobing
+    [0.85,  20],   // fast decay
+    [1.00,   0],   // seamless close
+  ]);
 
-  // GUI sliders show unsigned magnitudes (visual snap is fine; the actual
-  // canvas math uses the float values above).
+  // Tear amount: massive at WOW moments, zero at calm.
+  const ta = kf(t, [
+    [0.00,   0],
+    [0.10,   8],
+    [0.20,  55],   // WOW #1
+    [0.35,  15],
+    [0.45,  50],   // WOW #2
+    [0.55,   5],
+    [0.65,   0],   // eerie calm
+    [0.70,  55],   // WOW #3
+    [0.80,  55],
+    [0.85,  10],
+    [1.00,   0],
+  ]);
+
+  // Tear density: dense during chaos, sparse during calm.
+  const td = kf(t, [
+    [0.00,   6],
+    [0.10,  12],
+    [0.20,  45],   // WOW #1
+    [0.35,  18],
+    [0.45,  40],   // WOW #2
+    [0.55,   8],
+    [0.65,   6],   // eerie calm
+    [0.70,  45],   // WOW #3
+    [0.80,  45],
+    [0.85,  12],
+    [1.00,   6],
+  ]);
+
+  // Roll offset: steady creep, accelerates during WOW moments.
+  rollOffsetPx = kf(t, [
+    [0.00, 0],
+    [0.20, 0.8],
+    [0.45, 2.0],
+    [0.70, 3.0],
+    [0.85, 3.8],
+    [1.00, 4.0],
+  ]);
+
   const rgbDisplay = Math.abs(rgbOffsetSigned);
   if(gui){
     gui.rows.get('rgbOffset')?._write(rgbDisplay);
@@ -271,18 +312,15 @@ function applyAnimationT(t_loop){
   params.rgbOffset = rgbDisplay;
   params.tearAmount = ta;
   params.tearDensity = td;
-}
 
-function renderAnimationFrame(t_loop){
-  applyAnimationT(t_loop);
-  // Reseed tear pattern in 12 slots per cycle (every ~1.25 s) so torn bands
-  // shift without flickering frame-to-frame. Round-and-wrap means slot(0) ==
-  // slot(1-ε): the loop closes on the same tear pattern it opened with.
-  const SLOTS = 12;
-  const slot = Math.round(t_loop * SLOTS) % SLOTS;
-  // Always derive seed from slot — deterministic, so frame N seeds == frame 0.
+  // Reseed tear pattern in 24 slots per cycle so torn bands shift without
+  // flickering frame-to-frame. Derived from slot — deterministic, so frame 0
+  // seeds == frame 1: the loop closes on the same tear pattern.
+  const SLOTS = 24;
+  const slot = Math.round(t * SLOTS) % SLOTS;
   tearSeed = (slot * 9301 + 49297) | 0;
   lastTearStamp = slot;
+
   paint();
 }
 
@@ -354,7 +392,38 @@ function init(){
       rec: document.querySelector('.wa-rec'),
     });
   }
-  cv.addEventListener('mousemove', handleMouseMove);
+  if(window.WAInteract){
+    window.WAInteract.wire(cv, {
+      onMove(ax, ay){
+        if(!params.interactive || params.animate) return;
+        params.rgbOffset  = Math.round(ax * 160);
+        params.tearAmount = Math.round(ay * 200);
+        if(gui){
+          gui.rows.get('rgbOffset')?._write(params.rgbOffset);
+          gui.rows.get('tearAmount')?._write(params.tearAmount);
+        }
+        tearSeed = (performance.now() / 90) | 0;
+        schedule('paint');
+      },
+      onWheel(dy){
+        params.intensity = Math.max(0, Math.min(100, (params.intensity || params.rgbOffset / 1.6) + dy * 0.05));
+        params.rgbOffset = Math.round(params.intensity * 1.6);
+        gui?.rows.get('rgbOffset')?._write(params.rgbOffset);
+        schedule('paint');
+      },
+      onClick(ax, ay){
+        // Glitch burst — slam intensity to max
+        params.rgbOffset = 160;
+        params.tearAmount = 200;
+        params.tearDensity = 45;
+        tearSeed = (performance.now() / 13) | 0;
+        gui?.rows.get('rgbOffset')?._write(160);
+        schedule('paint');
+      },
+    });
+  } else {
+    cv.addEventListener('mousemove', handleMouseMove);
+  }
   window.addEventListener('resize', () => { fitCanvas(); schedule('raster'); });
   fitCanvas();
   redraw();

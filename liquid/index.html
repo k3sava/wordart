@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Wave — wordart</title>
+<title>Liquid — wordart</title>
 <link rel="stylesheet" href="../shared/chrome.css">
 <link rel="stylesheet" href="../shared/gui.css">
 <script src="../shared/theme.js"></script>
@@ -23,12 +23,12 @@
   </nav>
   <div class="grow"></div>
   <nav class="effect-nav compact" aria-label="Effect navigation">
-    <a class="effect-nav-arrow" href="../type/" title="Previous effect (type)" aria-label="Previous">‹</a>
+    <a class="effect-nav-arrow" href="../line/" title="Previous effect (line)" aria-label="Previous">‹</a>
     <button type="button" class="effect-nav-current" id="effect-nav-open" aria-haspopup="dialog" aria-expanded="false" title="Browse all 16 effects">
-      <span class="effect-nav-name">wave</span>
+      <span class="effect-nav-name">liquid</span>
       <span class="effect-nav-chev">›</span>
     </button>
-    <a class="effect-nav-arrow" href="../aurora/" title="Next effect (aurora)" aria-label="Next">›</a>
+    <a class="effect-nav-arrow" href="../mesh/" title="Next effect (mesh)" aria-label="Next">›</a>
   </nav>
   <div class="wa-actions">
     <button id="help-btn" title="Keyboard shortcuts">?</button>
@@ -45,17 +45,17 @@
 <aside class="wg" id="panel">
   <div class="wg-title" role="button" tabindex="0">Controls</div>
   <div class="wg-body">
-    <div class="wg-row wg-slider" data-key="amplitude" data-min="0" data-max="200" data-step="1"><div class="wg-name">Amplitude</div><div class="wg-widget"><div class="wg-track"><div class="wg-fill"></div></div><input type="number" inputmode="numeric"></div></div>
-    <div class="wg-row wg-slider" data-key="frequency" data-min="1" data-max="20" data-step="0.1"><div class="wg-name">Frequency</div><div class="wg-widget"><div class="wg-track"><div class="wg-fill"></div></div><input type="number" inputmode="numeric"></div></div>
-    <div class="wg-row wg-slider" data-key="phase" data-min="0" data-max="360" data-step="1"><div class="wg-name">Phase</div><div class="wg-widget"><div class="wg-track"><div class="wg-fill"></div></div><input type="number" inputmode="numeric"></div></div>
+    <div class="wg-row wg-slider" data-key="drip"      data-min="0"   data-max="80"  data-step="1"><div class="wg-name">Drip</div><div class="wg-widget"><div class="wg-track"><div class="wg-fill"></div></div><input type="number" inputmode="numeric"></div></div>
+    <div class="wg-row wg-slider" data-key="waveWidth" data-min="20"  data-max="300" data-step="5"><div class="wg-name">Wave width</div><div class="wg-widget"><div class="wg-track"><div class="wg-fill"></div></div><input type="number" inputmode="numeric"></div></div>
+    <div class="wg-row wg-slider" data-key="speed"     data-min="0.1" data-max="3"   data-step="0.1"><div class="wg-name">Speed</div><div class="wg-widget"><div class="wg-track"><div class="wg-fill"></div></div><input type="number" inputmode="numeric"></div></div>
+    <div class="wg-row wg-slider" data-key="viscosity" data-min="0"   data-max="1"   data-step="0.05"><div class="wg-name">Viscosity</div><div class="wg-widget"><div class="wg-track"><div class="wg-fill"></div></div><input type="number" inputmode="numeric"></div></div>
     <div class="wg-row wg-bool"   data-key="animate"><div class="wg-name">Animate</div><label class="wg-widget"><input type="checkbox"></label></div>
     <div class="wg-row wg-bool"   data-key="interactive"><div class="wg-name">Interactive</div><label class="wg-widget"><input type="checkbox"></label></div>
     <div class="wg-row wg-text"   data-key="text"><div class="wg-name">Text</div><div class="wg-widget"><input type="text"></div></div>
-    <div class="wg-row wg-slider" data-key="textSize" data-min="100" data-max="600" data-step="1"><div class="wg-name">Text size</div><div class="wg-widget"><div class="wg-track"><div class="wg-fill"></div></div><input type="number" inputmode="numeric"></div></div>
+    <div class="wg-row wg-slider" data-key="textSize"  data-min="100" data-max="500" data-step="1"><div class="wg-name">Text size</div><div class="wg-widget"><div class="wg-track"><div class="wg-fill"></div></div><input type="number" inputmode="numeric"></div></div>
     <div class="wg-row wg-bool"   data-key="bold"><div class="wg-name">Bold</div><label class="wg-widget"><input type="checkbox"></label></div>
     <div class="wg-row wg-bool"   data-key="italic"><div class="wg-name">Italic</div><label class="wg-widget"><input type="checkbox"></label></div>
     <div class="wg-row wg-color"  data-key="bg"><div class="wg-name">Background</div><div class="wg-widget"><div class="wg-swatch"><input type="color"></div><input type="text" spellcheck="false"></div></div>
-    <div class="wg-row wg-bool"   data-key="invert"><div class="wg-name">Invert</div><label class="wg-widget"><input type="checkbox"></label></div>
   </div>
   <p class="wg-credit">inspired by <a href="https://www.type-tools.com/" target="_blank" rel="noopener">type-tools.com</a></p>
 </aside>

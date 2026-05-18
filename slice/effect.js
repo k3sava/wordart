@@ -8,27 +8,23 @@
 //   blit source → destination, both relative to canvas centre,
 //   with a horizontal scale of textStretch applied around the centre.
 //
-// Animate ping-pongs the offset between -50 and +50 over a 2 s cycle, with
-// a multi-pass cubic-bezier ease so the slices linger at the extremes.
+// Animation — 30s wow moments with keyframed splits, offset, and alternating
+// directions for a ribbon explosion effect.
 'use strict';
 
 const SPEEDY_ANIMALS = ["Cheetah","Falcon","Sailfish","Marlin","Gazelle","Hare","Ostrich","Lion","Leopard"];
 const ELECTRIC_COLORS = ["#000000","#ADD8E6","#FF96FF","#ffcf37","#B5651D","#ff781e","#b6b6ed","#00FF00","#FF3333"];
-const CYCLE_MS = 15000;
-// Full oscillation through both signs over the cycle:
-//   t=0    : offset = +amplitude (bands fanned right)
-//   t=0.25 : offset = 0           (text crisp — first reveal)
-//   t=0.5  : offset = -amplitude (bands fanned LEFT)
-//   t=0.75 : offset = 0           (text crisp again — second reveal)
-//   t=1    : offset = +amplitude (loops cleanly)
-// Two reveals per cycle, bands sweep through both fan directions.
+const CYCLE_MS = 30000;
+// Full oscillation through both signs over the cycle.
 const ANIM = {
-  offsetAmp:   60,            // peak |offset| during oscillation
+  offsetAmp:   60,
   splits:      { rest: 10, peak: 10 },
   textStretch: { rest: 1,  peak: 1 },
 };
 function lerp(a, b, t){ return a + (b - a) * t; }
 function pingpongT(elapsed){ return (1 - Math.cos((elapsed % CYCLE_MS) / CYCLE_MS * Math.PI * 2)) / 2; }
+// Keyframe interpolator: stops = [[t, value], ...]
+function kf(t, stops){ for(let i=0;i<stops.length-1;i++){const[t0,v0]=stops[i],[t1,v1]=stops[i+1];if(t>=t0&&t<=t1)return v0+(v1-v0)*((t-t0)/(t1-t0));}return stops[stops.length-1][1]; }
 
 function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
 
@@ -44,6 +40,8 @@ const params = {
   bold: Math.random() < 0.5,
   italic: Math.random() < 0.5,
   bg: pick(ELECTRIC_COLORS),
+  // Internal: alternating direction flag for WOW #2
+  _altDir: false,
 };
 if(window.WAState) window.WAState.hydrate(params);
 
@@ -120,25 +118,6 @@ function rasterizeText(){
   };
 }
 
-function applyAnimationT(t01, t_loop){
-  const ang = (t_loop || 0) * Math.PI * 2;
-  // Offset oscillates +amp → 0 → -amp → 0 → +amp via cosine. Text reads
-  // crisply at t=0.25 and t=0.75 (when offset crosses zero) and bands fan
-  // to both sides between. No axis rotation — the text needs to be upright
-  // when it reaches its legible moment.
-  const o = ANIM.offsetAmp * Math.cos(ang);
-  const s = lerp(ANIM.splits.rest, ANIM.splits.peak, t01);
-  const stretch = lerp(ANIM.textStretch.rest, ANIM.textStretch.peak, t01);
-  if(gui){
-    gui.rows.get('offset')?._write(o);
-    gui.rows.get('splits')?._write(s);
-    gui.rows.get('textStretch')?._write(stretch);
-  }
-  params.offset = o;
-  params.splits = Math.max(2, Math.floor(s));
-  params.textStretch = stretch;
-}
-
 function paint(){
   window.WAGUI?.flashValues(params);
   const dpr = Math.max(1, window.devicePixelRatio || 1);
@@ -166,7 +145,9 @@ function paint(){
   const last = params.splits - 1;
   const dBandW = Math.floor(tw);
   for(let i = 0; i < params.splits; i++){
-    const xOff = Math.floor(i * params.offset - totalOff / 2) / params.textStretch;
+    // WOW #2: alternate direction — every other slice goes the opposite way.
+    const dirMult = params._altDir ? (i % 2 === 0 ? 1 : -1) : 1;
+    const xOff = Math.floor(i * params.offset * dirMult - totalOff / 2) / params.textStretch;
     const yPos = Math.floor(-th / 2 + i * splitH);
     const sx = srcXBase;
     const sy = srcYBase + i * sSplitH;
@@ -191,8 +172,66 @@ function redraw(){
 }
 
 function renderAnimationFrame(t_loop){
-  const t01 = (1 - Math.cos(t_loop * 2 * Math.PI)) / 2;
-  applyAnimationT(t01, t_loop);
+  const t = ((t_loop % 1) + 1) % 1;
+
+  // splits: keyframed — few at start, explode at WOW #1, reduce, then rapid
+  // oscillation at WOW #3.
+  let splits;
+  if(t >= 0.70 && t < 0.85){
+    // WOW #3: rapid oscillation between 2 and 30 splits.
+    const localT = (t - 0.70) / 0.15;
+    splits = Math.round(2 + 28 * (0.5 + 0.5 * Math.sin(localT * Math.PI * 8)));
+  } else {
+    splits = Math.round(kf(t, [
+      [0.00,  2],   // almost normal text
+      [0.15, 12],   // ramp up
+      [0.25, 25],   // WOW #1: maximum splits — text explodes into ribbons
+      [0.35, 14],   // fewer but more dramatic
+      [0.45, 18],   // WOW #2: alternating direction, keep splits moderate
+      [0.55, 10],   // re-aligning slowly
+      [0.65,  2],   // back to 2 splits, dramatic offset
+      [0.70,  2],   // WOW #3 start
+      [0.85,  2],   // drop to 2
+      [1.00,  2],   // crisp close
+    ]));
+  }
+
+  // offset: keyframed — small at start, max at WOW #1, alternating at WOW #2,
+  // then rapid change at WOW #3.
+  let offset;
+  if(t >= 0.70 && t < 0.85){
+    // WOW #3: rapidly changing offset.
+    const localT = (t - 0.70) / 0.15;
+    offset = 60 * Math.sin(localT * Math.PI * 10);
+  } else {
+    offset = kf(t, [
+      [0.00,  2],   // small offset — almost normal
+      [0.15, 30],   // growing
+      [0.25, 60],   // WOW #1: maximum offset, ribbons explode
+      [0.35, 50],   // fewer slices, dramatic
+      [0.45, 40],   // WOW #2: alternating direction
+      [0.55, 20],   // re-aligning
+      [0.65, 60],   // two-tone glitch — 2 splits, max offset
+      [0.70, 60],   // WOW #3 start
+      [0.85,  0],   // collapse to crisp
+      [1.00,  2],   // seamless close
+    ]);
+  }
+
+  // alternating direction: active during WOW #2 window.
+  params._altDir = (t >= 0.45 && t < 0.55);
+
+  const stretch = 1; // keep stretch at 1 throughout for clean slices
+
+  if(gui){
+    gui.rows.get('offset')?._write(offset);
+    gui.rows.get('splits')?._write(splits);
+    gui.rows.get('textStretch')?._write(stretch);
+  }
+  params.offset = offset;
+  params.splits = Math.max(2, splits);
+  params.textStretch = stretch;
+
   rasterizeText();
   paint();
 }
@@ -256,7 +295,38 @@ function init(){
     if(params.animate) return; // animation loop picks up dirty.raster on next tick
     if(RASTER_KEYS.has(key)) schedule('raster'); else schedule('paint');
   });
-  cv.addEventListener('mousemove', handleMouseMove);
+  if(window.WAInteract){
+    window.WAInteract.wire(cv, {
+      onMove(ax, ay){
+        if(!params.interactive || params.animate) return;
+        // ax drives splits count, ay drives offset magnitude.
+        params.splits = Math.max(2, Math.round(2 + ax * 28));
+        params.offset = Math.round((ay - 0.5) * 120);
+        if(gui){
+          gui.rows.get('splits')?._write(params.splits);
+          gui.rows.get('offset')?._write(params.offset);
+        }
+        schedule('paint');
+      },
+      onWheel(dy){
+        params.splits = Math.max(2, Math.min(30, params.splits + Math.round(dy * 0.1)));
+        gui?.rows.get('splits')?._write(params.splits);
+        schedule('paint');
+      },
+      onClick(ax, ay){
+        // Randomize split offsets — new random arrangement.
+        params.offset = Math.round((Math.random() - 0.5) * 120);
+        params.splits = Math.max(2, Math.round(2 + Math.random() * 28));
+        if(gui){
+          gui.rows.get('offset')?._write(params.offset);
+          gui.rows.get('splits')?._write(params.splits);
+        }
+        schedule('paint');
+      },
+    });
+  } else {
+    cv.addEventListener('mousemove', handleMouseMove);
+  }
   if(window.WAExport){
     window.WAExport.wire({
       canvas: cv,

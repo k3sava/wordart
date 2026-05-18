@@ -12,21 +12,11 @@
 'use strict';
 
 const ELECTRIC_COLORS = ["#000000","#ADD8E6","#FF96FF","#ffcf37","#B5651D","#ff781e","#b6b6ed","#00FF00","#FF3333"];
-const CYCLE_MS = 15000;
-// Mesh ANIM — fabric being pushed and pulled.
-//   amplitude: 160 → 0 → 160  (cosine ease; t=0.5 is dead flat = legible)
-//   ampY:      0 → 110 → 0 → 110 → 0  (sin² of 2t; peaks at t=0.25 / t=0.75)
-//              orthogonal to amplitude so warp "circles" the legible moment
-//   phase:     0 → 720°  (two full rotations; seamless: 720 ≡ 0)
-//   frequency: 4 → 8 → 4  (slow breathe; seamless cosine)
-// Pixel-diff frame-0 vs frame-N is exact: every curve returns to its rest value.
-const ANIM = {
-  amplitudePeak: 160, // at t=0 and t=1
-  ampYPeak:      110, // at t=0.25 and t=0.75
-  freqRest:        6,
-  freqPeak:        14,
-  phaseTurns:      2, // total rotations across one cycle
-};
+const CYCLE_MS = 30000;
+
+// kf(t, stops) — keyframe interpolator. stops = [[t, value], ...]
+function kf(t, stops){ for(let i=0;i<stops.length-1;i++){const[t0,v0]=stops[i],[t1,v1]=stops[i+1];if(t>=t0&&t<=t1)return v0+(v1-v0)*((t-t0)/(t1-t0));}return stops[stops.length-1][1]; }
+
 function lerp(a, b, t){ return a + (b - a) * t; }
 function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
 
@@ -173,31 +163,75 @@ function paint(){
 function redraw(){ rasterizeText(); paint(); }
 
 function renderAnimationFrame(t_loop){
-  const TAU = Math.PI * 2;
-  // Horizontal amplitude: cos shape, 160 at endpoints, 0 at t=0.5.
-  // = peak * (1 + cos(2π t)) / 2  → seamless (cos is periodic).
-  const amp = ANIM.amplitudePeak * (1 + Math.cos(TAU * t_loop)) / 2;
-  // Vertical amplitude: sin² of 2t → 0 at t=0/0.5/1, peaks at t=0.25/0.75.
-  // Orthogonal to amp — when fabric stops pulling sideways it tugs vertically,
-  // then releases at the legible midpoint, then tugs vertically the other way.
-  const s = Math.sin(TAU * t_loop); // sin(2π t), period 1 — seamless
-  const ay = ANIM.ampYPeak * s * s;
-  // Frequency breathes 4 → 8 → 4 on a cosine; smooth, seamless.
-  const freq = (ANIM.freqRest + ANIM.freqPeak) / 2
-             - (ANIM.freqPeak - ANIM.freqRest) / 2 * Math.cos(TAU * t_loop);
-  // Phase: monotonic sweep, total turns × 360. Wraps cleanly at the end.
-  const phase = (t_loop * 360 * ANIM.phaseTurns) % 360;
+  // WOW animation — 30s keyframed arc:
+  // t=0.00: flat text (amp=0)
+  // t=0.10: gentle wave appears
+  // t=0.20: WOW #1 — massive amp + high freq → pure wave chaos, unreadable
+  // t=0.30: freq drops, amp stays high → huge slow single wave
+  // t=0.40: WOW #2 — ampY maxes out → text warps in both axes
+  // t=0.50: both amplitudes drop, text resolves
+  // t=0.60: freq surges to max + medium amplitude → tight rippling
+  // t=0.70: WOW #3 — phase reversal mid-wave → text appears to tear apart
+  // t=0.85: all settles
+  // t=1.00: amplitude=0, seamless
+
+  const amp = kf(t_loop, [
+    [0.00,   0],
+    [0.10,  40],
+    [0.20, 240],  // WOW #1: chaos
+    [0.30, 220],  // huge slow wave
+    [0.40, 180],  // WOW #2 build
+    [0.50,  10],  // text resolves
+    [0.60, 120],  // second build
+    [0.70, 200],  // WOW #3 peak
+    [0.85,  20],
+    [1.00,   0],
+  ]);
+
+  const freq = kf(t_loop, [
+    [0.00,  4],
+    [0.10,  5],
+    [0.20, 28],  // WOW #1: high freq → chaos
+    [0.30,  1],  // drops to single slow wave
+    [0.40,  2],
+    [0.50,  4],
+    [0.60, 30],  // WOW #3 build — tight ripple
+    [0.70, 22],  // tearing
+    [0.85,  5],
+    [1.00,  4],
+  ]);
+
+  const ampY = kf(t_loop, [
+    [0.00,   0],
+    [0.35,   0],
+    [0.40, 130],  // WOW #2: vertical warp maxes out
+    [0.50,   5],
+    [0.65,   0],
+    [0.70,  80],  // WOW #3: some vertical during tear
+    [0.85,   0],
+    [1.00,   0],
+  ]);
+
+  // Phase: at WOW #3 (t=0.70) inject a sharp phase reversal for the tear effect
+  let phase;
+  if(t_loop >= 0.68 && t_loop < 0.72){
+    // Rapid phase flip: sweeps 0→180 then back within the window
+    const sub = (t_loop - 0.68) / 0.04;
+    phase = sub < 0.5 ? sub * 2 * 180 : (1 - (sub - 0.5) * 2) * 180;
+  } else {
+    phase = (t_loop * 360 * 2) % 360;
+  }
 
   params.amplitude = amp;
-  params.ampY      = ay;
+  params.ampY      = ampY;
   params.frequency = freq;
   params.phase     = phase;
 
   if(gui){
-    gui.rows.get('amplitude')?._write(amp);
-    gui.rows.get('ampY')?._write(ay);
-    gui.rows.get('frequency')?._write(freq);
-    gui.rows.get('phase')?._write(phase);
+    gui.rows.get('amplitude')?._write(Math.round(amp));
+    gui.rows.get('ampY')?._write(Math.round(ampY));
+    gui.rows.get('frequency')?._write(Math.round(freq));
+    gui.rows.get('phase')?._write(Math.round(phase));
   }
   paint();
 }
@@ -269,7 +303,32 @@ function init(){
       rec: document.querySelector('.wa-rec'),
     });
   }
-  cv.addEventListener('mousemove', handleMouseMove);
+  if(window.WAInteract){
+    window.WAInteract.wire(cv, {
+      onMove(ax, ay){
+        if(!params.interactive || params.animate) return;
+        params.amplitude = Math.round(ax * 240);
+        params.frequency = Math.max(1, Math.round(1 + ay * 39));
+        if(gui){
+          gui.rows.get('amplitude')?._write(params.amplitude);
+          gui.rows.get('frequency')?._write(params.frequency);
+        }
+        schedule('paint');
+      },
+      onWheel(dy){
+        params.amplitude = Math.max(0, Math.min(240, params.amplitude + dy * 0.1));
+        gui?.rows.get('amplitude')?._write(Math.round(params.amplitude));
+        if(!params.animate) schedule('paint');
+      },
+      onClick(ax, ay){
+        params.phase = Math.round(Math.random() * 360);
+        gui?.rows.get('phase')?._write(params.phase);
+        if(!params.animate) schedule('paint');
+      },
+    });
+  } else {
+    cv.addEventListener('mousemove', handleMouseMove);
+  }
   window.addEventListener('resize', () => { fitCanvas(); schedule('raster'); });
   fitCanvas();
   redraw();

@@ -7,14 +7,17 @@
 // giving a seamless loop. Mid-loop the particles have dispersed into a fog.
 //
 // Interactive mode: cursor X modulates particle size, cursor Y modulates drift.
-// Animate mode: seamless 15-second particle breathing cycle.
+// Animate mode: seamless 30-second particle breathing cycle.
 'use strict';
 
 const ELECTRIC_COLORS = ["#000000","#ADD8E6","#FF96FF","#ffcf37","#B5651D","#ff781e","#b6b6ed","#00FF00","#FF3333"];
-const CYCLE_MS = 15000;
+const CYCLE_MS = 30000;
 const ANIM = {
   maxFreq: 3, // particles oscillate 1, 2, or 3 complete cycles per loop
 };
+
+// kf(t, stops) — keyframe interpolator. stops = [[t, value], ...]
+function kf(t, stops){ for(let i=0;i<stops.length-1;i++){const[t0,v0]=stops[i],[t1,v1]=stops[i+1];if(t>=t0&&t<=t1)return v0+(v1-v0)*((t-t0)/(t1-t0));}return stops[stops.length-1][1]; }
 
 function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
 function lerp(a, b, t){ return a + (b - a) * t; }
@@ -203,7 +206,70 @@ function redraw(){
 }
 
 function renderAnimationFrame(t_loop){
+  // WOW animation — 30s keyframed arc:
+  // t=0.00: particles at home, drift=0, text sharp
+  // t=0.10: drift ramps up, particles start dancing
+  // t=0.20: WOW #1 — maximum drift → text dissolves into starfield
+  // t=0.35: drift drops, particles return home → text reforms
+  // t=0.40: particle count surges to 2000
+  // t=0.50: WOW #2 — maximum particles + drift → dense nebula fog
+  // t=0.60: count drops back, particles snap home
+  // t=0.65: WOW #3 — particles shimmer at 3× frequency → rapid shimmer
+  // t=0.80: drift=0, text perfectly crisp
+  // t=0.85: gentle drift resumes
+  // t=1.00: drift=0, seamless
+
+  const drift = kf(t_loop, [
+    [0.00,   0],
+    [0.10,  30],
+    [0.20, 120],  // WOW #1: maximum drift
+    [0.35,   2],  // text reforms
+    [0.40,  20],
+    [0.50, 120],  // WOW #2: dense nebula
+    [0.60,   5],  // snap home
+    [0.65,  80],  // WOW #3: shimmer
+    [0.80,   0],  // crisp
+    [0.85,  20],  // gentle drift
+    [1.00,   0],
+  ]);
+
+  const count = kf(t_loop, [
+    [0.00, 1200],
+    [0.38, 1200],
+    [0.40, 2000],  // surge for WOW #2
+    [0.58, 2000],
+    [0.60, 1200],  // drop back
+    [1.00, 1200],
+  ]);
+
+  const particleSize = kf(t_loop, [
+    [0.00, 2.5],
+    [0.20, 1.5],  // fine during dissolution
+    [0.50, 1.2],  // dense nebula needs small particles
+    [0.65, 3.0],  // bigger for shimmer visibility
+    [0.80, 2.5],
+    [1.00, 2.5],
+  ]);
+
+  const prevDrift = params.drift;
+  const prevCount = Math.round(params.count);
+  const newCount  = Math.round(count);
+
+  params.drift        = drift;
+  params.count        = newCount;
+  params.particleSize = particleSize;
+
+  if(Math.round(prevDrift) !== Math.round(drift) || prevCount !== newCount){
+    needsRebuild = true;
+  }
+
   currentT = t_loop;
+
+  if(gui){
+    gui.rows.get('drift')?._write(Math.round(drift));
+    gui.rows.get('count')?._write(newCount);
+    gui.rows.get('particleSize')?._write(Math.round(particleSize * 10) / 10);
+  }
   paint(t_loop);
 }
 
@@ -281,7 +347,33 @@ function init(){
       rec: document.querySelector('.wa-rec'),
     });
   }
-  cv.addEventListener('mousemove', handleMouseMove);
+  if(window.WAInteract){
+    window.WAInteract.wire(cv, {
+      onMove(ax, ay){
+        if(!params.interactive || params.animate) return;
+        params.particleSize = 1 + ax * 7;
+        params.drift = Math.round(ay * 120);
+        if(gui){
+          gui.rows.get('particleSize')?._write(params.particleSize);
+          gui.rows.get('drift')?._write(params.drift);
+        }
+        needsRebuild = true;
+        paint(currentT);
+      },
+      onWheel(dy){
+        params.drift = Math.max(0, Math.min(120, params.drift + dy * 0.05));
+        gui?.rows.get('drift')?._write(Math.round(params.drift));
+        if(!params.animate) schedule('paint');
+      },
+      onClick(ax, ay){
+        params.drift = 120;
+        needsRebuild = true;
+        if(!params.animate) schedule('paint');
+      },
+    });
+  } else {
+    cv.addEventListener('mousemove', handleMouseMove);
+  }
   window.addEventListener('resize', () => {
     fitCanvas();
     schedule('raster');

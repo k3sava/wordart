@@ -9,23 +9,26 @@
 //   ice   — dark-blue (top) → cyan → white (bottom)
 //   fire  — yellow (top) → orange → dark-red → near-black (bottom)
 //
-// Animation: block size ping-pongs large (barely legible) → small (crisp) →
-// large using cos(2πt). Both endpoints equal the large size → seamless loop.
-// The text "resolves" at t=0.5 when blocks are smallest and the letterforms
-// snap into focus.
+// Animation: 30s keyframed arc with WOW moments including huge blocks,
+// palette shifts, and rapid oscillation. Seamless loop.
 //
 // Interactive: cursor X → blockSize, cursor Y → gap.
 'use strict';
 
 const ELECTRIC_COLORS = ["#000000","#ADD8E6","#FF96FF","#ffcf37","#B5651D","#ff781e","#b6b6ed","#00FF00","#FF3333"];
-const CYCLE_MS = 15000;
+const CYCLE_MS = 30000;
 const ANIM = {
   blockSizePeak:  38,  // largest block size (barely legible text)
   blockSizeFloor:  3,  // smallest block size (crisp pixel-perfect text)
 };
 
+// kf(t, stops) — keyframe interpolator. stops = [[t, value], ...]
+function kf(t, stops){ for(let i=0;i<stops.length-1;i++){const[t0,v0]=stops[i],[t1,v1]=stops[i+1];if(t>=t0&&t<=t1)return v0+(v1-v0)*((t-t0)/(t1-t0));}return stops[stops.length-1][1]; }
+
 function lerp(a, b, t){ return a + (b - a) * t; }
 function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
+
+const PALETTES = ['mono', 'heat', 'ice', 'fire'];
 
 const params = {
   blockSize: 8 + Math.floor(Math.random() * 10),  // 8..17
@@ -241,13 +244,74 @@ function redraw(){ rasterizeText(); paint(); }
 
 // ── Animation ──────────────────────────────────────────────────────────────
 
+// Palette crossfade helper — snap to nearest palette name at t
+function paletteAtT(t){
+  // t=0.00-0.39: mono
+  // t=0.40-0.59: heat  (WOW #2: stained glass)
+  // t=0.60-0.64: ice
+  // t=0.65-0.79: fire  (WOW #3: ice→fire oscillation)
+  // t=0.80-1.00: mono
+  if(t < 0.40) return 'mono';
+  if(t < 0.60) return 'heat';
+  if(t < 0.65) return 'ice';
+  if(t < 0.80) return 'fire';
+  return 'mono';
+}
+
 function renderAnimationFrame(t_loop){
-  // cos(2πt): 1 at t=0/1, -1 at t=0.5. Normalise to [0,1] with (1+cos)/2.
-  // So cosCurve=1 at endpoints (large blocks) and 0 at t=0.5 (small blocks).
-  const cosCurve = (1 + Math.cos(t_loop * 2 * Math.PI)) / 2;
-  const bs = ANIM.blockSizeFloor + cosCurve * (ANIM.blockSizePeak - ANIM.blockSizeFloor);
+  // WOW animation — 30s keyframed arc:
+  // t=0.00: blockSize=3 (fine, crisp pixel text)
+  // t=0.15: blockSize grows
+  // t=0.25: WOW #1 — HUGE blocks (38px), text is just 2-3 giant squares per letter
+  // t=0.35: blocks shrink rapidly
+  // t=0.40: palette shifts from mono to heat
+  // t=0.50: WOW #2 — heat palette + medium blocks + gap → mosaic stained glass
+  // t=0.60: palette shifts to ice
+  // t=0.65: WOW #3 — rapid block size oscillation between 3 and 38, ice→fire palette
+  // t=0.80: blockSize=3, mono palette
+  // t=1.00: same as start, seamless
+
+  let bs;
+  // WOW #3 window: rapid oscillation between 3 and 38
+  if(t_loop >= 0.65 && t_loop < 0.80){
+    const sub = (t_loop - 0.65) / 0.15;
+    // 3 full oscillations in the window
+    bs = 3 + (38 - 3) * (0.5 - 0.5 * Math.cos(sub * 3 * 2 * Math.PI));
+  } else {
+    bs = kf(t_loop, [
+      [0.00,  3],
+      [0.15, 15],
+      [0.25, 38],  // WOW #1: giant blocks
+      [0.35,  4],  // rapid shrink
+      [0.40,  8],
+      [0.50, 18],  // WOW #2: mosaic
+      [0.60, 10],
+      [0.65,  3],  // start of WOW #3 oscillation
+      [0.80,  3],
+      [1.00,  3],
+    ]);
+  }
+
+  const gap = kf(t_loop, [
+    [0.00, 0],
+    [0.40, 0],
+    [0.50, 3],  // WOW #2: gap gives mosaic look
+    [0.60, 1],
+    [0.80, 0],
+    [1.00, 0],
+  ]);
+
+  const newPalette = paletteAtT(t_loop);
+
   params.blockSize = bs;
-  if(gui) gui.rows.get('blockSize')?._write(bs);
+  params.gap       = gap;
+  params.palette   = newPalette;
+
+  if(gui){
+    gui.rows.get('blockSize')?._write(Math.round(bs));
+    gui.rows.get('gap')?._write(Math.round(gap));
+    gui.rows.get('palette')?._write(newPalette);
+  }
   paint(bs);
 }
 
@@ -330,7 +394,33 @@ function init(){
       rec:     document.querySelector('.wa-rec'),
     });
   }
-  cv.addEventListener('mousemove', handleMouseMove);
+  if(window.WAInteract){
+    window.WAInteract.wire(cv, {
+      onMove(ax, ay){
+        if(!params.interactive || params.animate) return;
+        params.blockSize = 2 + Math.round(ax * 38);
+        params.gap       = Math.round(ay * 8);
+        if(gui){
+          gui.rows.get('blockSize')?._write(params.blockSize);
+          gui.rows.get('gap')?._write(params.gap);
+        }
+        schedule('paint');
+      },
+      onWheel(dy){
+        params.blockSize = Math.max(2, Math.min(40, params.blockSize + dy * 0.05));
+        gui?.rows.get('blockSize')?._write(Math.round(params.blockSize));
+        if(!params.animate) schedule('paint');
+      },
+      onClick(ax, ay){
+        const P = ['mono', 'heat', 'ice', 'fire'];
+        const i = P.indexOf(params.palette);
+        params.palette = P[(i + 1) % P.length];
+        if(!params.animate) schedule('paint');
+      },
+    });
+  } else {
+    cv.addEventListener('mousemove', handleMouseMove);
+  }
   window.addEventListener('resize', () => { fitCanvas(); schedule('raster'); });
   fitCanvas();
   redraw();
