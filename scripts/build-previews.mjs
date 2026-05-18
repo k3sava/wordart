@@ -21,6 +21,18 @@ const ROOT = resolve(HERE, '..');
 const OUT = resolve(ROOT, 'assets/previews');
 const BASE = process.env.WORDART_BASE || 'http://localhost:8011';
 
+// Per-effect default text (mirrors params.text in each effect.js).
+// Empty string = let the effect use its own params.text default.
+const EFFECT_TEXT = {
+  aurora: 'hello', blur: 'hello', cascade: 'is there', chromatic: 'anybody',
+  clutter: 'out there?', coil: 'this is', collapse: 'a lot of', constellation: 'fun',
+  construct: 'says', cylinder: 'the creator.', dither: 'can you', glitch: 'please',
+  halftone: 'tell them that', interference: "it's not!", line: 'okay fine',
+  liquid: 'it is', mesh: 'a little', noise: 'bit fun', pixel: 'maybe more',
+  ribbon: 'than a bit', ripple: "it's actually", slice: 'really quite',
+  type: 'incredibly', wave: 'fun. sorry.',
+};
+
 const ALL_EFFECTS = [
   'aurora','blur','cascade','chromatic','clutter','coil','collapse','constellation',
   'construct','cylinder','dither','glitch','halftone','interference','line','liquid',
@@ -42,11 +54,14 @@ async function captureSlug(browser, slug) {
   const url = `${BASE}/${slug}/`;
 
   const ctx = await browser.newContext({ viewport: VIEWPORT });
-  await ctx.addInitScript(() => {
+  const effectText = EFFECT_TEXT[slug] || '';
+  await ctx.addInitScript(({ text }) => {
     try { localStorage.setItem('wa.splash.seen', '1'); } catch {}
-    // Seed a recognizable phrase so every preview shows readable type.
-    try { localStorage.setItem('wa.text', 'wordart'); } catch {}
-  });
+    // Clear shared text so each effect uses its own params.text default.
+    // If text is provided, seed it explicitly (for overrides).
+    try { localStorage.removeItem('wa.text'); } catch {}
+    if (text) try { localStorage.setItem('wa.text', text); } catch {}
+  }, { text: effectText });
   const page = await ctx.newPage();
   const tmp = mkdtempSync(join(tmpdir(), `wa-${slug}-`));
   try {
@@ -63,6 +78,15 @@ async function captureSlug(browser, slug) {
 
     // Settle text + layout.
     await page.waitForTimeout(400);
+
+    // Seed per-effect text via the params row (same path as user typing).
+    if (effectText) {
+      await page.evaluate((text) => {
+        const row = document.querySelector('.wg-row[data-key="text"]');
+        if (row && typeof row._write === 'function') row._write(text);
+      }, effectText);
+      await page.waitForTimeout(200);
+    }
 
     // Toggle Animate ON for any effects whose renderAt() depends on it; pause
     // the natural RAF so we drive frames deterministically.
