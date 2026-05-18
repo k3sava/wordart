@@ -69,8 +69,10 @@ async function captureSlug(browser, slug) {
     await page.waitForFunction(() => !!window.WAEffect, { timeout: 10000 });
 
     // Hide chrome so the captured frames are pure canvas.
+    // .wa-mode-bottom is created dynamically by gui.js (Animate/Touch bottom bar).
     await page.addStyleTag({ content: `
-      .wa-top, .wg, .wa-bottom, .wa-rec, #pix-splash, #pix-nav-overlay { display: none !important; }
+      .wa-top, .wg, .wa-bottom, .wa-rec, .wa-mode-bottom,
+      #pix-splash, #pix-nav-overlay { display: none !important; }
       body.wa-effect, .wa-stage { background: #000; }
       .wa-stage { position: fixed; inset: 0; }
       #cv { position: fixed; inset: 0; width: 100vw !important; height: 100vh !important; }
